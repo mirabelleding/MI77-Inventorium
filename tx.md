@@ -38,6 +38,6 @@ recalc_engine/
 │
 └── config/
     └── results.py
-    └──stuff to retrieve data
+    └── functions to retrieve data
 ```
 x = RecalcEngine(transaction_id)
