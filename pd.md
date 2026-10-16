@@ -1,7 +1,8 @@
-# Pandas Advanced Methods — Comprehensive Study Notes
+# Pandas Advanced Methods
 
 **Reference style:** method/function → what it does, with distinctions, examples and application notes.  
 **Coverage:** DataFrame, Series, GroupBy, `.str`, `.dt`, Index/MultiIndex, time-series, windowing, IO, testing and top-level `pd` functions.  
+
 **Version guidance:** The original guide was written around Pandas 3.0.x. Some features also work in 2.x; verify version-specific behavior. For example, `DataFrame.map()` is the elementwise method replacing the older `applymap()`, and `DataFrame.mad()` is no longer part of current Pandas. An API marked *historical* is included to preserve the full original study map, not recommended for new code.
 
 > **Mental model:** know which *operation* you need (filter, align, aggregate, transform, reshape, compare) before choosing the exact method.

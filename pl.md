@@ -37,7 +37,7 @@ LazyFrame ◄───┼──────────────────�
    ▼          │
 DataFrame     │
    │          │
-   │ df["col"]
+   │      df["col"]
    └─────────►Series
 ```
 ---

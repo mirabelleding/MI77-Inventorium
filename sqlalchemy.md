@@ -1914,6 +1914,76 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy import event
 ```
 
+## Selectable Classes
+```
+ReturnsRows
+│
+└── Selectable
+    │
+    ├───────────────────────────────────────────────────────────────┐
+    │                                                               │
+    ▼                                                               ▼
+FromClause                                                     SelectBase
+"can appear in FROM"                                           "a SELECT statement"
+    │                                                               │
+    │                                                               ├── TextualSelect
+    │                                                               │      text(...).columns(...)
+    │                                                               │
+    │                                                               └── GenerativeSelect
+    │                                                                      │
+    │                                                                      ├── Select
+    │                                                                      │      select(...)
+    │                                                                      │
+    │                                                                      └── CompoundSelect
+    │                                                                             union(...)
+    │                                                                             union_all(...)
+    │                                                                             intersect(...)
+    │                                                                             except_(...)
+    │
+    ├── Join
+    │      table1.join(table2)
+    │
+    └── NamedFromClause
+           │
+           ├── TableClause
+           │      │
+           │      └── Table
+           │
+           │          table(...)     → TableClause
+           │          Table(...)     → Table
+           │
+           │
+           ├── AliasedReturnsRows
+           │      │
+           │      ├── Subquery
+           │      │      select(...).subquery()
+           │      │
+           │      ├── CTE
+           │      │      select(...).cte()
+           │      │
+           │      └── FromClauseAlias
+           │             │
+           │             ├── Alias
+           │             │      table.alias()
+           │             │
+           │             ├── TableSample
+           │             │      table.tablesample(...)
+           │             │
+           │             └── Lateral
+           │                    select(...).lateral()
+           │
+           └── LateralFromClause
+                  │
+                  ├── Values
+                  │      values(...)
+                  │
+                  ├── Lateral
+                  │      [multiple inheritance]
+                  │
+                  └── TableValuedAlias
+                         func.some_func().table_valued(...)
+```
+
 ### Official references
 
 - [SQLAlchemy documentation](https://docs.sqlalchemy.org/en/21/)
