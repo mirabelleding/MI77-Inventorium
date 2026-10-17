@@ -1,4 +1,5 @@
 ```python
+# batch/model.py
 from __future__ import annotations
 
 import multiprocessing as mp
@@ -88,7 +89,7 @@ class ECLModellingBatch:
 ```
 ---
 ```python
-# batch_results
+# batch/outputs
 class ECLModellingOutputs:
 
     def __init__(
