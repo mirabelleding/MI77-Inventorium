@@ -1,14 +1,14 @@
 ```
-RecalcEngine
+   RecalcEngine
         │
         ▼
    Transaction
         │
         ▼
      Pipeline
-   .compile() → ExecutionPlan
-        │          │
-    .execute()   ◀──┘
+    .compile() ──▶ ExecutionPlan
+    .execute() ◀────────┘
+        │
         ▼
  Calculations
         │

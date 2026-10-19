@@ -8,7 +8,7 @@ In Python, **classes are themselves objects**.
 
 ```text
 user = User(1, "Alice")  ── instance of ──► User  ── instance of ──► TableMeta
-                                                   (class)          (metaclass)
+                                                      (class)       (metaclass)
 ```
 
 - **Instance:** an object created from a class (`user`).
