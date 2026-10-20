@@ -10,7 +10,7 @@
     .execute() ◀────────┘
         │
         ▼
- Calculations
+  Calculations
         │
         ▼
  RecalcResults
@@ -58,7 +58,7 @@ class RecalcEngine:
     def __init__(self, transaction_id):
         self.transaction_id = transaction_id
 
-    def run(self):
+    def run(self) -> RecalcResults:
         transaction = Transaction(self.transaction_id)
 
         pipeline = Pipeline(transaction)
@@ -69,120 +69,66 @@ class RecalcEngine:
 ---
 ```python
 # core/transaction.py
-from sqlalchemy import select
-
-from your_db_package import load_df
-from ..sources.tables import TRANSACTION_TABLE
-
-
 class Transaction:
 
     def __init__(self, transaction_id):
-        self.id = transaction_id
-
+        self.uuid = transaction_id
+        self.transaction_type = ...
+        self.process_month = ...
         self.data = self._get_data()
 
-        self.transaction_type = ...
-        self.process_mode = ...
-        self.process_month = ...
-
     def _get_data(self):
-        stmt = (
-            select(TRANSACTION_TABLE)
-            .where(
-                TRANSACTION_TABLE.c.transaction_id
-                == self.id
-            )
-        )
-
+        stmt = ... 
         return load_df(stmt)
+
 ```
 ---
 ```python
 #calculations/base.py
-from abc import ABC, abstractmethod
-
-
 class Calculation(ABC):
 
-    INPUT_MEASURE_TYPES = set()
-    OUTPUT_MEASURE_TYPE = None
+# set or dict; for handing of cross-mth calculations
+    INPUT_MEASURE_TYPES = ...   
+    OUTPUT_MEASURE_TYPE = ...
 
     @abstractmethod
-    def get_scopes(self, transaction):
-        ...
-
-    @abstractmethod
-    def get_data_requirements(self, scopes):
+    def if_triggered(self, transaction) -> Bool:
         ...
 
     @abstractmethod
     def calculate(self, scopes, results):
-        ...
+        pass
 ```
 ```python
 # actual calculators
-from .base import Calculation
-
-
 class ExampleCalc(Calculation):
 
-    TRIGGER_MEASURE_TYPES = {
-        "A",
-        "B",
-    }
+    ....
 
-    RESULT_ATTR = "example"
-
-    def get_scopes(self, transaction):
+    def if_triggered(self, transaction) -> Bool:
 
         triggered = transaction.data[
-            transaction.data["measure_type"]
+            transaction.data["measure_type_code"]
             .isin(self.TRIGGER_MEASURE_TYPES)
         ]
 
         return (
             triggered[
                 [
-                    "hierarchy_id",
-                    "stage",
-                    "currency",
-                    "month_date",
+                    "key record cols..."
                 ]
             ]
             .drop_duplicates()
             .reset_index(drop=True)
         )
 
-    def get_data_requirements(self, scopes):
-        # Example:
-        # Calculation also needs historical measure C
-
-        requirements = scopes.copy()
-        requirements["measure_type"] = "C"
-
-        return requirements
-
-    def calculate(self, scopes, results):
-
-        # At this point `scopes` has ALREADY been
-        # enriched with supplementary data.
-
-        # Can also consume earlier calculation results:
-        previous = results.some_other_table
-
-        records = ...
-
-        return records
+    def calculate(self, ..) -> pd.DataFrame:
+        ...
+        
 ```
 ---
 ```python
 #core/execution_plan.py
-from ..sources.loaders import (
-    get_hierarchy_data,
-    get_hierarchy_group_data,
-)
-
 class ExecutionPlan:
 
     def __init__(self):
@@ -195,7 +141,7 @@ class ExecutionPlan:
         if requirements is not None and not requirements.empty:
             self._data_requirements.append(requirements)
 
-    def prepare(self):
+    def _evaluate_dataset(self):
         supplementary = self._get_supplementary_data()
         self._enrich_scopes(supplementary)
 
@@ -206,14 +152,6 @@ class ExecutionPlan:
             ignore_index=True,
         ).drop_duplicates()
 
-        hierarchy_req = requirements[
-            requirements["hierarchy_id"].notna()
-        ]
-
-        group_req = requirements[
-            requirements["hierarchy_group_id"].notna()
-        ]
-
         hierarchy_data = ...
         group_data = ...
 
@@ -221,31 +159,22 @@ class ExecutionPlan:
 
     def _enrich_scopes(self, supplementary):
         ...
+
 ```
-after compilations:
+after pipeline compilations:
 ```
 {
-    ModelACLCalc(): model_acl_scopes,
-    ImpairmentCalc(): impairment_scopes,
+    CalcA(): calc_a_scopes,
+    CalcB(): calc_b_scopes,
 }
 ```
 ---
 ```python
 # core/pipeline.py
-from .execution_plan import ExecutionPlan
-from .results import RecalcResults
-
-from ..calculations.model_acl import ModelACLCalc
-from ..calculations.os import OSCalc
-from ..calculations.impairment import ImpairmentCalc
-
-
 class Pipeline:
 
-    CALCULATIONS = (
-        ModelACLCalc,
-        OSCalc,
-        ImpairmentCalc,
+    PIPE = (
+        ....
     )
 
     def __init__(self, transaction):
@@ -257,7 +186,7 @@ class Pipeline:
 
         plan = ExecutionPlan()
 
-        for Calc in self.CALCULATIONS:
+        for Calc in self.PIPE:
             calc = Calc()
 
             scopes = calc.get_scopes(
@@ -308,12 +237,12 @@ class Pipeline:
 class RecalcResults:
 
     def __init__(self):
-        self.ecl_result = pd.DataFrame()
-        self.model_acl_output = pd.DataFrame()
-        self.master_forecast = pd.DataFrame()
+        self.table_1 = pd.DataFrame()
+        self.table_2 = pd.DataFrame()
+        self.table_3 = pd.DataFrame()
 
 
-    def add(self, target, records):
+    def append(self, target, records):  #e.g. results.append(table_1, records)
 
         if records is None or records.empty:
             return
@@ -329,46 +258,26 @@ class RecalcResults:
             ),
         )
 ```
-```python
-# example
-results.add("model_acl", records)
-# updates
-results.model_acl
-```
 ---
 ```python
 # sources/tables.py
 from db_reflection import ...
-TRANSACTION_TABLE = refelct(...)
-......
+
+... = refelct(...)
+
+
 ```
 ---
 ```python
 # sources/loaders.py
-from sqlalchemy import select
-
-from db_reflection import load_df
-
-from .tables import (
-    HIERARCHY_SOURCE,
-    HIERARCHY_GROUP_SOURCE,
-)
-
-
-def get_hierarchy_data(requirements):
-    stmt = (
-        select(HIERARCHY_SOURCE)
-        .where(...)
-    )
+def get_hierarchy_data(...):
+    stmt = ...
 
     return load_df(stmt)
 
 
-def get_hierarchy_group_data(requirements):
-    stmt = (
-        select(HIERARCHY_GROUP_SOURCE)
-        .where(...)
-    )
+def get_hierarchy_group_data(...):
+    stmt = ...
 
     return load_df(stmt)
 
@@ -376,14 +285,6 @@ def get_hierarchy_group_data(requirements):
 ---
 ```python
 # config/definitions.py
-MODEL_TYPE_MEASURES = {
-    "TYPE_A": {...},
-    "TYPE_B": {...},
-}
 
-TRANSACTION_TYPE_LEVEL = {
-    "model_upload": "hierarchy_id",
-    "group_upload": "hierarchy_group_id",
-}
-
+... some mapping
 ```
