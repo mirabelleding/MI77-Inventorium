@@ -1,31 +1,32 @@
 ```
 ECLModelling
     │
+    ▼            ┌── data: pd.DataFrame
+InputsBuilder ───├── PortfolioParamLoader ───▶ PortfolioParams
+.build()         ├── FLACurvesLoader ───▶ FLACurves
+    │            └── ScenarioWeights
     ▼
-InputsBuilder
-.build()
+ModellingInputs
     │
-    │   ┌── data: pd.DataFrame
-    └───├── PortfolioParams
-        ├── FLACurve
-        └── ScenarioWeights
-                │
-                ▼
-            Casacade
-            .calculate() ───▶ RRMCalculator ──▶ RRMResults ──┐
-                                    │                        │
-                                    ▼                        │
-                              SIRCalculator ──▶ SIRResults ──┤
-                                    │                        │
-                                    ▼                        │
-                              FLACalculator ──▶ FLAResults ──┤
-                                    │                        │
-                                    ▼                        │
-                              ECLCalculator ──▶ ECLResults ──┤
-                                                             │
-                                                             │
-                                                             ▼
-                                                     ModellingResults
+    ▼
+Casacade
+.execute() ───▶ RRMCalculator ──┐
+                        │       │
+                        ▼       │
+                SIRCalculator ──┤
+                        │       │
+                        ▼       │
+                FLACalculator ──┤
+                        │       │
+                        ▼       │
+                ECLCalculator ──┤
+                                │
+                                ▼
+                        ModellingResults
+                            ├── RRMResults
+                            ├── SIRResults
+                            ├── FLAResults
+                            └── ECLResults
 ```
 ```
 ECLModellingBatch
@@ -42,4 +43,23 @@ BatchOutputsCompiler
     │
     ▼
 ModellingBatchOutputs
+```
+---
+```
+get_hierarchy_ids()
+       │
+       ▼
+get_lag_matrix_cte()
+   ├── wrto_policy_bucket
+   ├── dlq_lag
+   ├── wrto_lag
+   └── rec_lag
+       │
+       ▼
+get_hierarchy_ref_cte()
+   ├── hierarchy_id
+   └── mth_hierarchy_id
+       │
+       ▼
+select_ecl_input()
 ```
