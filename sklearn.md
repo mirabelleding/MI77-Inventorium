@@ -2,6 +2,38 @@
 
 **Scope:** Estimator architecture, supervised learning, unsupervised learning, data preparation, pipelines, feature engineering, validation, hyperparameter tuning, model evaluation, inspection, calibration, and production-minded practices.
 
+## Table of contents
+
+1. [Mental model and setup](#1-mental-model-and-setup)
+2. [Estimator API and object architecture](#2-estimator-api-and-object-architecture)
+3. [Data representation and splitting](#3-data-representation-and-splitting)
+4. [Preprocessing and scaling](#4-preprocessing-and-scaling)
+5. [Missing data and categorical encoding](#5-missing-data-and-categorical-encoding)
+6. [Pipelines and column-specific transformations](#6-pipelines-and-column-specific-transformations)
+7. [Feature engineering and feature selection](#7-feature-engineering-and-feature-selection)
+8. [Linear regression family](#8-linear-regression-family)
+9. [Linear classifiers and probability estimates](#9-linear-classifiers-and-probability-estimates)
+10. [Decision trees and ensembles](#10-decision-trees-and-ensembles)
+11. [Support vector machines and nearest neighbors](#11-support-vector-machines-and-nearest-neighbors)
+12. [Naive Bayes, discriminant analysis, and Gaussian processes](#12-naive-bayes-discriminant-analysis-and-gaussian-processes)
+13. [Clustering](#13-clustering)
+14. [Dimensionality reduction](#14-dimensionality-reduction)
+15. [Anomaly detection and novelty detection](#15-anomaly-detection-and-novelty-detection)
+16. [Model evaluation: classification](#16-model-evaluation-classification)
+17. [Model evaluation: regression](#17-model-evaluation-regression)
+18. [Cross-validation strategies](#18-cross-validation-strategies)
+19. [Hyperparameter search](#19-hyperparameter-search)
+20. [Probability calibration and threshold selection](#20-probability-calibration-and-threshold-selection)
+21. [Model inspection and interpretation](#21-model-inspection-and-interpretation)
+22. [Class imbalance, weights, and metadata](#22-class-imbalance-weights-and-metadata)
+23. [Custom estimators and streaming updates](#23-custom-estimators-and-streaming-updates)
+24. [Model persistence, reproducibility, and deployment](#24-model-persistence-reproducibility-and-deployment)
+25. [Complete end-to-end examples](#25-complete-end-to-end-examples)
+26. [Common mistakes and debugging](#26-common-mistakes-and-debugging)
+27. [Comprehensive API reference tables](#27-comprehensive-api-reference-tables)
+28. [Exercises and solutions](#28-exercises-and-solutions)
+29. [Official resources](#29-official-resources)
+
 ---
 
 ## 1. Mental model and setup

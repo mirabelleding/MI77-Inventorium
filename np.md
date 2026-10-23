@@ -8,6 +8,33 @@
 >
 > **Examples:** Many code blocks reuse variables defined earlier within the same section; run them in context. Output blocks are illustrative; whitespace, printed dtype and float formatting may differ by platform.
 
+## Table of Contents
+
+1. [Mental model: NumPy vs pandas](#1-mental-model-numpy-vs-pandas)
+2. [Creating arrays](#2-creating-arrays)
+3. [ndarray attributes you must know](#3-ndarray-attributes-you-must-know)
+4. [Data types and conversions](#4-data-types-and-conversions)
+5. [Basic indexing, slicing, and stepping](#5-basic-indexing-slicing-and-stepping)
+6. [3D and N-dimensional indexing](#6-3d-and-n-dimensional-indexing)
+7. [Boolean masks and advanced indexing](#7-boolean-masks-and-advanced-indexing)
+8. [Understanding `axis`, `keepdims`, and reductions](#8-understanding-axis-keepdims-and-reductions)
+9. [Broadcasting and `np.newaxis`](#9-broadcasting-and-npnewaxis)
+10. [Reshaping and changing dimensions](#10-reshaping-and-changing-dimensions)
+11. [Views, copies, strides, and memory](#11-views-copies-strides-and-memory)
+12. [Vectorized arithmetic, comparisons, and logical operations](#12-vectorized-arithmetic-comparisons-and-logical-operations)
+13. [Conditional transformations: `where`, `select`, `clip`](#13-conditional-transformations-where-select-clip)
+14. [Aggregations, statistics, and cumulative operations](#14-aggregations-statistics-and-cumulative-operations)
+15. [Sorting, searching, uniqueness, and membership](#15-sorting-searching-uniqueness-and-membership)
+16. [Combining, splitting, repeating, and tiling](#16-combining-splitting-repeating-and-tiling)
+17. [NaN, infinity, and missing-value handling](#17-nan-infinity-and-missing-value-handling)
+18. [Random number generation](#18-random-number-generation)
+19. [Linear algebra essentials](#19-linear-algebra-essentials)
+20. [Dates, numerical sequences, and differences](#20-dates-numerical-sequences-and-differences)
+21. [NumPy + pandas interoperability](#21-numpy--pandas-interoperability)
+22. [Performance, validation, and common pitfalls](#22-performance-validation-and-common-pitfalls)
+23. [Quick-reference tables](#23-quick-reference-tables)
+24. [Practice exercises with solutions](#24-practice-exercises-with-solutions)
+25. [Suggested learning order and references](#25-suggested-learning-order-and-references)
 ---
 
 ## 1. Mental model: NumPy vs pandas
@@ -361,7 +388,7 @@ a[(a < 5) | (a > 12)]    # [ 3 20]
 a[~(a > 10)]            # [3 7 5]
 ```
 
-**Wrong:** `a > 5 and a < 12` (`and` expects scalar truth values).  
+**Wrong:** `a > 5 and a < 12` (`and` expects scalar truth values).
 **Right:** `(a > 5) & (a < 12)` (elementwise Boolean operation).
 
 ### Boolean masks on a 2D array
@@ -1049,7 +1076,7 @@ np.isfinite(x)   # [ True False  True False False]
 np.isinf(x)      # [False False False  True  True]
 ```
 
-**Do not use:** `x == np.nan` to locate NaNs.  
+**Do not use:** `x == np.nan` to locate NaNs.
 **Do use:** `np.isnan(x)` for numerical arrays.
 
 ### NaN-aware reductions

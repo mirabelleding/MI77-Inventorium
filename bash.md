@@ -4,6 +4,37 @@ A detailed, example-driven reference for interactive Bash, file and process mana
 
 **Target:** GNU Bash (not generic POSIX `sh`). Examples assume a Unix-like environment with common external utilities installed. Bash 4+ and Bash 4.4+ features are identified when relevant; some macOS systems still ship Bash 3.2 by default.
 
+## Table of Contents
+
+1. [Bash, the Shell, and the Terminal](#1-bash-the-shell-and-the-terminal)
+2. [Getting Help and Understanding Commands](#2-getting-help-and-understanding-commands)
+3. [Paths, Directories, and Files](#3-paths-directories-and-files)
+4. [Viewing and Transforming Text](#4-viewing-and-transforming-text)
+5. [Command Structure and Exit Status](#5-command-structure-and-exit-status)
+6. [Variables, Environment, and Scope](#6-variables-environment-and-scope)
+7. [Quoting, Expansion, and Word Splitting](#7-quoting-expansion-and-word-splitting)
+8. [Globbing, Brace Expansion, and Pattern Matching](#8-globbing-brace-expansion-and-pattern-matching)
+9. [Parameter Expansion and String Operations](#9-parameter-expansion-and-string-operations)
+10. [Arithmetic and Numerical Expressions](#10-arithmetic-and-numerical-expressions)
+11. [Tests, Conditions, and Regular Expressions](#11-tests-conditions-and-regular-expressions)
+12. [Loops and Case Statements](#12-loops-and-case-statements)
+13. [Functions, Arguments, and Return Values](#13-functions-arguments-and-return-values)
+14. [Indexed and Associative Arrays](#14-indexed-and-associative-arrays)
+15. [Reading Input and Processing Files Safely](#15-reading-input-and-processing-files-safely)
+16. [Redirection, Pipelines, and File Descriptors](#16-redirection-pipelines-and-file-descriptors)
+17. [Subshells, Grouping, and Process Substitution](#17-subshells-grouping-and-process-substitution)
+18. [Processes, Jobs, Signals, and Traps](#18-processes-jobs-signals-and-traps)
+19. [Writing Executable Scripts](#19-writing-executable-scripts)
+20. [Error Handling, Strict Mode, and Debugging](#20-error-handling-strict-mode-and-debugging)
+21. [Command-Line Argument Parsing](#21-command-line-argument-parsing)
+22. [Portable and Secure Shell Practices](#22-portable-and-secure-shell-practices)
+23. [Advanced Text and Data Pipelines](#23-advanced-text-and-data-pipelines)
+24. [Networking, Automation, and Scheduling](#24-networking-automation-and-scheduling)
+25. [Performance, Concurrency, and Advanced Features](#25-performance-concurrency-and-advanced-features)
+26. [Real-World Script Examples](#26-real-world-script-examples)
+27. [Reference Tables and Common Pitfalls](#27-reference-tables-and-common-pitfalls)
+28. [Practice Exercises](#28-practice-exercises)
+29. [Official References](#29-official-references)
 ---
 
 # Part I — Working in the Terminal

@@ -2,11 +2,58 @@
 
 A detailed reference for Python Polars covering the expression system, DataFrame and LazyFrame operations, data types, selectors, joins, aggregation, reshaping, strings, datetimes, nested data, missing values, time series, I/O, SQL, interoperability, testing, lazy execution, optimization, and pandas-to-Polars translation patterns.
 
+# Table of Contents
+
+1. [Core mental model](#1-core-mental-model)
+2. [Core Polars objects](#2-core-polars-objects)
+3. [Creating DataFrames and Series](#3-creating-dataframes-and-series)
+4. [Expressions](#4-expressions)
+5. [Column selection](#5-column-selection)
+6. [Selectors](#6-selectors)
+7. [Selecting and creating columns](#7-selecting-and-creating-columns)
+8. [Filtering rows](#8-filtering-rows)
+9. [Conditional expressions](#9-conditional-expressions)
+10. [Sorting and row selection](#10-sorting-and-row-selection)
+11. [Renaming, dropping, and schema operations](#11-renaming-dropping-and-schema-operations)
+12. [Casting and data types](#12-casting-and-data-types)
+13. [Missing values and NaN](#13-missing-values-and-nan)
+14. [Numeric expressions](#14-numeric-expressions)
+15. [Aggregations and descriptive statistics](#15-aggregations-and-descriptive-statistics)
+16. [GroupBy](#16-groupby)
+17. [Window functions with `over`](#17-window-functions-with-over)
+18. [Cumulative, shift, diff, and ranking operations](#18-cumulative-shift-diff-and-ranking-operations)
+19. [Joins](#19-joins)
+20. [Concatenation and stacking](#20-concatenation-and-stacking)
+21. [Reshaping](#21-reshaping)
+22. [String expressions](#22-string-expressions)
+23. [Date and datetime expressions](#23-date-and-datetime-expressions)
+24. [List expressions](#24-list-expressions)
+25. [Array expressions](#25-array-expressions)
+26. [Struct expressions](#26-struct-expressions)
+27. [Categorical and Enum data](#27-categorical-and-enum-data)
+28. [Horizontal operations](#28-horizontal-operations)
+29. [Time-series operations](#29-time-series-operations)
+30. [Rolling and dynamic grouping](#30-rolling-and-dynamic-grouping)
+31. [LazyFrame](#31-lazyframe)
+32. [Lazy optimization and query plans](#32-lazy-optimization-and-query-plans)
+33. [Streaming and sinks](#33-streaming-and-sinks)
+34. [Input and output](#34-input-and-output)
+35. [Database operations](#35-database-operations)
+36. [SQL interface](#36-sql-interface)
+37. [Interoperability](#37-interoperability)
+38. [Python UDFs and when to avoid them](#38-python-udfs-and-when-to-avoid-them)
+39. [Pipelines with `pipe`](#39-pipelines-with-pipe)
+40. [Iteration and Python conversion](#40-iteration-and-python-conversion)
+41. [Testing Polars code](#41-testing-polars-code)
+42. [Common ETL patterns](#42-common-etl-patterns)
+43. [Pandas → Polars translation reference](#43-pandas--polars-translation-reference)
+44. [Common pandas habits to unlearn](#44-common-pandas-habits-to-unlearn)
+45. [High-value method reference](#45-high-value-method-reference)
+
 ```python
 import polars as pl
 import polars.selectors as cs
 ```
-
 ---
 ```
                    POLARS

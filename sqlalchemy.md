@@ -1,12 +1,92 @@
-# SQLAlchemy 
+# SQLAlchemy
 
 **Reference style:** SQLAlchemy class/function/method → what it does, with Core, ORM, execution, Result, relationship, SQL, schema, inspection, async, typing, and practical examples.
-  
-**Primary syntax:** modern SQLAlchemy **2.x** (`select(...)`, `Session.execute()` / `Session.scalars()`, typed declarative mappings). The original guide specifically focused on 2.1.x; older `session.query()` / `Query` are **legacy**.  
+
+**Primary syntax:** modern SQLAlchemy **2.x** (`select(...)`, `Session.execute()` / `Session.scalars()`, typed declarative mappings). The original guide specifically focused on 2.1.x; older `session.query()` / `Query` are **legacy**.
 
 **DB support:** compilation and capabilities vary by dialect (e.g., PostgreSQL/SQLite/MySQL/SQL Server); not every expression is available on every backend.
 
 > **Mental model:** A *SQL statement/expression*, an *ORM object*, a *session*, and a *result object* are different types with different method families. Understanding the object type is central to readable SQLAlchemy code.
+
+## Table of Contents
+
+- [1. SELECT — basic construction](#1-select--basic-construction)
+- [2. SELECT — choosing columns](#2-select--choosing-columns)
+- [3. Filtering operators](#3-filtering-operators)
+- [4. Boolean expressions](#4-boolean-expressions)
+- [5. String operators](#5-string-operators)
+- [6. NULL handling](#6-null-handling)
+- [7. JOINs](#7-joins)
+- [8. Relationship-based joins](#8-relationship-based-joins)
+- [9. Aliases](#9-aliases)
+- [10. Subqueries](#10-subqueries)
+- [11. EXISTS](#11-exists)
+- [12. Set operations](#12-set-operations)
+- [13. CTEs](#13-ctes)
+- [14. Recursive CTEs](#14-recursive-ctes)
+- [15. CASE expressions](#15-case-expressions)
+- [16. SQL functions](#16-sql-functions)
+- [17. Aggregation](#17-aggregation)
+- [18. Labels](#18-labels)
+- [19. CAST / type coercion](#19-cast--type-coercion)
+- [20. Literal expressions](#20-literal-expressions)
+- [21. `text()` — raw SQL escape hatch](#21-text--raw-sql-escape-hatch)
+- [22. INSERT](#22-insert)
+- [23. UPDATE](#23-update)
+- [24. DELETE](#24-delete)
+- [25. RETURNING](#25-returning)
+- [26. Execution](#26-execution)
+- [27. `Result` methods](#27-result-methods)
+- [28. Result shape mental model](#28-result-shape-mental-model)
+- [29. `scalar()` vs `scalars()`](#29-scalar-vs-scalars)
+- [30. Session — object persistence](#30-session--object-persistence)
+- [31. Session — flushing / committing](#31-session--flushing--committing)
+- [32. Session — retrieving by primary key](#32-session--retrieving-by-primary-key)
+- [33. Session — refresh / expiration](#33-session--refresh--expiration)
+- [34. Session — detaching objects](#34-session--detaching-objects)
+- [35. Session transactions](#35-session-transactions)
+- [36. Session execution controls](#36-session-execution-controls)
+- [37. ORM model declaration](#37-orm-model-declaration)
+- [38. `mapped_column()`](#38-mapped_column)
+- [39. Relationships](#39-relationships)
+- [40. Relationship query operators](#40-relationship-query-operators)
+- [41. Relationship loading](#41-relationship-loading)
+- [42. Column loading controls](#42-column-loading-controls)
+- [43. `.options()`](#43-options)
+- [44. Global ORM filtering](#44-global-orm-filtering)
+- [45. ORM aliases](#45-orm-aliases)
+- [46. SQL window functions](#46-sql-window-functions)
+- [47. Useful window functions](#47-useful-window-functions)
+- [48. Ordering helpers](#48-ordering-helpers)
+- [49. Distinct](#49-distinct)
+- [50. Tuple comparisons](#50-tuple-comparisons)
+- [51. Arithmetic expressions](#51-arithmetic-expressions)
+- [52. Metadata](#52-metadata)
+- [53. Table](#53-table)
+- [54. Table convenience methods](#54-table-convenience-methods)
+- [55. Schema constraints](#55-schema-constraints)
+- [56. Database reflection](#56-database-reflection)
+- [57. Engine](#57-engine)
+- [58. Connection](#58-connection)
+- [59. Compiling SQL](#59-compiling-sql)
+- [60. ORM state inspection](#60-orm-state-inspection)
+- [61. Mapper inspection](#61-mapper-inspection)
+- [62. ORM column expressions](#62-orm-column-expressions)
+- [63. Bulk ORM INSERT](#63-bulk-orm-insert)
+- [64. Bulk ORM UPDATE](#64-bulk-orm-update)
+- [65. Locking](#65-locking)
+- [66. Execution options](#66-execution-options)
+- [67. Streaming / large query results](#67-streaming--large-query-results)
+- [68. Async SQLAlchemy](#68-async-sqlalchemy)
+- [69. Events](#69-events)
+- [70. Dialect-specific INSERT extensions](#70-dialect-specific-insert-extensions)
+- [71. SQLAlchemy classes/types worth knowing](#71-sqlalchemy-classestypes-worth-knowing)
+- [72. Function annotations and choosing the correct abstraction](#72-function-annotations-and-choosing-the-correct-abstraction)
+- [73. Compact SQLAlchemy vocabulary map](#73-compact-sqlalchemy-vocabulary-map)
+  - [Priority list for complex transaction-processing architectures](#priority-list-for-complex-transaction-processing-architectures)
+  - [Minimal import cheat sheet](#minimal-import-cheat-sheet)
+- [Selectable Class Hierarchy](#selectable-class-hierarchy)
+  - [Official references](#official-references)
 
 ## 1. SELECT — basic construction
 
@@ -1914,7 +1994,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy import event
 ```
 
-## Selectable Classes
+## Selectable Class Hierarchy
 ```
 ReturnsRows
 │

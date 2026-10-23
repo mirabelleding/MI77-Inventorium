@@ -1,7 +1,7 @@
 # Python Built-in Functions and Standard Library: Extensive Study Notes
 
-**Scope:** Python 3.11+ unless a feature is marked with a higher minimum version.  
-**Level:** Foundations → intermediate → advanced.  
+**Scope:** Python 3.11+ unless a feature is marked with a higher minimum version.
+**Level:** Foundations → intermediate → advanced.
 **Purpose:** A practical reference for everyday Python, data processing, automation, package development, testing, and performance-conscious programming.
 
 > **Built-in function vs. standard-library module:** `len()` works without an import because it is a built-in. `itertools.chain()` requires `import itertools` because `itertools` is a standard-library module. Both ship with Python; neither requires `pip install`.

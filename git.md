@@ -4,6 +4,33 @@ A comprehensive, example-driven reference for learning Git, understanding its in
 
 **Conventions:** Examples use a Unix-like terminal, Git 2.23+ for `switch`/`restore`, and `main` as the default branch. Substitute your own repository URL, email address, and branch names. Commands in an example assume the preceding commands have been run unless stated otherwise.
 
+## Table of Contents
+
+1. [The Git Mental Model](#1-the-git-mental-model)
+2. [Installation and Configuration](#2-installation-and-configuration)
+3. [Creating and Cloning Repositories](#3-creating-and-cloning-repositories)
+4. [The Daily Editing and Commit Cycle](#4-the-daily-editing-and-commit-cycle)
+5. [Reading History and Comparing Versions](#5-reading-history-and-comparing-versions)
+6. [Branches, HEAD, and Detached HEAD](#6-branches-head-and-detached-head)
+7. [Remotes, Fetch, Pull, and Push](#7-remotes-fetch-pull-and-push)
+8. [Merging and Resolving Conflicts](#8-merging-and-resolving-conflicts)
+9. [Rebasing and Interactive History Editing](#9-rebasing-and-interactive-history-editing)
+10. [Undoing Changes: Restore, Reset, Revert](#10-undoing-changes-restore-reset-revert)
+11. [Stashing Unfinished Work](#11-stashing-unfinished-work)
+12. [Team Collaboration and Pull Requests](#12-team-collaboration-and-pull-requests)
+13. [Tags and Releases](#13-tags-and-releases)
+14. [Cherry-pick, Reflog, and Recovery](#14-cherry-pick-reflog-and-recovery)
+15. [Debugging History: Blame, Bisect, Search](#15-debugging-history-blame-bisect-search)
+16. [Multiple Worktrees and Sparse Checkout](#16-multiple-worktrees-and-sparse-checkout)
+17. [Submodules, Git LFS, and Large Repositories](#17-submodules-git-lfs-and-large-repositories)
+18. [Ignore Rules, Attributes, and Hooks](#18-ignore-rules-attributes-and-hooks)
+19. [Git Internals and Plumbing](#19-git-internals-and-plumbing)
+20. [Advanced Configuration, Security, and Maintenance](#20-advanced-configuration-security-and-maintenance)
+21. [Practical Project Workflows](#21-practical-project-workflows)
+22. [Command Reference and Decision Tables](#22-command-reference-and-decision-tables)
+23. [Practice Exercises](#23-practice-exercises)
+24. [Official References](#24-official-references)
+
 ---
 
 # Part I — Fundamentals

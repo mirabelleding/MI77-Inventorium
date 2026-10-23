@@ -4,6 +4,32 @@
 
 **Companion libraries:** NumPy (`ndarray`), Pandas (`DataFrame`), scikit-learn (estimators), Matplotlib (plots).
 
+## Table of contents
+
+1. [Mental model and installation](#1-mental-model-and-installation)
+2. [NumPy interoperability and conventions](#2-numpy-interoperability-and-conventions)
+3. [`scipy.stats`: descriptive statistics and distributions](#3-scipystats-descriptive-statistics-and-distributions)
+4. [Statistical inference and hypothesis tests](#4-statistical-inference-and-hypothesis-tests)
+5. [Resampling, confidence intervals, and density estimation](#5-resampling-confidence-intervals-and-density-estimation)
+6. [`scipy.optimize`: scalar and multivariable optimization](#6-scipyoptimize-scalar-and-multivariable-optimization)
+7. [Constrained, global, and linear optimization](#7-constrained-global-and-linear-optimization)
+8. [Equation solving and parameter estimation](#8-equation-solving-and-parameter-estimation)
+9. [`scipy.linalg`: dense linear algebra](#9-scipylinalg-dense-linear-algebra)
+10. [`scipy.sparse`: sparse arrays and solvers](#10-scipysparse-sparse-arrays-and-solvers)
+11. [`scipy.integrate`: numerical integration](#11-scipyintegrate-numerical-integration)
+12. [Ordinary differential equations](#12-ordinary-differential-equations)
+13. [`scipy.interpolate`: interpolation and splines](#13-scipyinterpolate-interpolation-and-splines)
+14. [`scipy.spatial`: distances and geometry](#14-scipyspatial-distances-and-geometry)
+15. [`scipy.signal`: filtering and signal features](#15-scipysignal-filtering-and-signal-features)
+16. [`scipy.fft`: Fourier analysis](#16-scipyfft-fourier-analysis)
+17. [`scipy.ndimage`: multidimensional image operations](#17-scipyndimage-multidimensional-image-operations)
+18. [`scipy.special`: special mathematical functions](#18-scipyspecial-special-mathematical-functions)
+19. [Working with Pandas](#19-working-with-pandas)
+20. [Numerical reliability, performance, and pitfalls](#20-numerical-reliability-performance-and-pitfalls)
+21. [Quick-reference API maps](#21-quick-reference-api-maps)
+22. [Exercises with solutions](#22-exercises-with-solutions)
+23. [Official resources](#23-official-resources)
+
 ---
 
 ## 1. Mental model and installation

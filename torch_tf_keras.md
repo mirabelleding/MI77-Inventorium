@@ -4,6 +4,44 @@
 
 **Version note:** Target modern PyTorch 2.x, TensorFlow 2.x, and **Keras 3**. Certain acceleration and deployment APIs depend on hardware, operating system, and versions. Examples are CPU-compatible unless they explicitly select a supported accelerator. TensorFlow is a framework; Keras 3 is a high-level API that can use TensorFlow, PyTorch, or JAX as its backend (and supports an OpenVINO inference-only backend).
 
+## Table of contents
+
+1. [What each library does](#1-what-each-library-does)
+2. [Framework architecture and comparison](#2-framework-architecture-and-comparison)
+3. [Installation, environments, and versions](#3-installation-environments-and-versions)
+4. [Neural network mathematics and terminology](#4-neural-network-mathematics-and-terminology)
+5. [Tensor shapes, batches, and model inputs](#5-tensor-shapes-batches-and-model-inputs)
+6. [PyTorch: tensor fundamentals](#6-pytorch-tensor-fundamentals)
+7. [PyTorch: autograd and computational graphs](#7-pytorch-autograd-and-computational-graphs)
+8. [PyTorch: modules and model construction](#8-pytorch-modules-and-model-construction)
+9. [PyTorch: datasets and loaders](#9-pytorch-datasets-and-loaders)
+10. [PyTorch: losses, optimizers, and schedulers](#10-pytorch-losses-optimizers-and-schedulers)
+11. [PyTorch: complete training and evaluation loop](#11-pytorch-complete-training-and-evaluation-loop)
+12. [PyTorch: devices, precision, and performance](#12-pytorch-devices-precision-and-performance)
+13. [PyTorch: persistence, compilation, and distributed concepts](#13-pytorch-persistence-compilation-and-distributed-concepts)
+14. [TensorFlow: tensors and variables](#14-tensorflow-tensors-and-variables)
+15. [TensorFlow: automatic differentiation](#15-tensorflow-automatic-differentiation)
+16. [TensorFlow: graph execution and `tf.function`](#16-tensorflow-graph-execution-and-tffunction)
+17. [TensorFlow: `tf.data` input pipelines](#17-tensorflow-tfdata-input-pipelines)
+18. [TensorFlow: complete low-level training loop](#18-tensorflow-complete-low-level-training-loop)
+19. [TensorFlow: performance and distribution](#19-tensorflow-performance-and-distribution)
+20. [Keras 3: backend model and `keras.ops`](#20-keras-3-backend-model-and-kerasops)
+21. [Keras: `Sequential` and Functional APIs](#21-keras-sequential-and-functional-apis)
+22. [Keras: model subclassing and custom layers](#22-keras-model-subclassing-and-custom-layers)
+23. [Keras: `compile`, `fit`, `evaluate`, and `predict`](#23-keras-compile-fit-evaluate-and-predict)
+24. [Keras: callbacks, metrics, and regularization](#24-keras-callbacks-metrics-and-regularization)
+25. [Keras: saving, loading, and exporting](#25-keras-saving-loading-and-exporting)
+26. [The same neural network in all three styles](#26-the-same-neural-network-in-all-three-styles)
+27. [Convolutional neural networks](#27-convolutional-neural-networks)
+28. [Sequences, recurrent networks, and attention](#28-sequences-recurrent-networks-and-attention)
+29. [Training concepts and failure modes](#29-training-concepts-and-failure-modes)
+30. [NumPy, Pandas, and scikit-learn interoperability](#30-numpy-pandas-and-scikit-learn-interoperability)
+31. [API maps: PyTorch](#31-api-maps-pytorch)
+32. [API maps: TensorFlow](#32-api-maps-tensorflow)
+33. [API maps: Keras](#33-api-maps-keras)
+34. [Decision guide and common pitfalls](#34-decision-guide-and-common-pitfalls)
+35. [Practice exercises with solutions](#35-practice-exercises-with-solutions)
+36. [Official documentation and learning path](#36-official-documentation-and-learning-path)
 ---
 
 ## 1. What each library does
