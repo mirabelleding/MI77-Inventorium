@@ -22,14 +22,14 @@
 ```
 recalc_engine/
 │
-├── recalc.py             
+├── recalc.py
 │
 ├── core/
 │   ├── __init__.py
-│   ├── transaction.py             
-│   ├── pipeline.py                 
-│   ├── execution_plan.py           
-│   └── results.py                  
+│   ├── transaction.py
+│   ├── pipeline.py
+│   ├── execution_plan.py
+│   └── results.py
 │
 ├── calculations/
 │   ├── base.py
@@ -37,8 +37,8 @@ recalc_engine/
 │   └── ...
 │
 ├── sources/
-│   ├── tables.py             
-│   └── loaders.py 
+│   ├── tables.py
+│   └── loaders.py
 │
 └── config/
     └── definitions.py
@@ -78,7 +78,7 @@ class Transaction:
         self.data = self._get_data()
 
     def _get_data(self):
-        stmt = ... 
+        stmt = ...
         return load_df(stmt)
 
 ```
@@ -88,7 +88,7 @@ class Transaction:
 class Calculation(ABC):
 
 # set or dict; for handing of cross-mth calculations
-    INPUT_MEASURE_TYPES = ...   
+    INPUT_MEASURE_TYPES = ...
     OUTPUT_MEASURE_TYPE = ...
 
     @abstractmethod
@@ -124,7 +124,7 @@ class ExampleCalc(Calculation):
 
     def calculate(self, ..) -> pd.DataFrame:
         ...
-        
+
 ```
 ---
 ```python
