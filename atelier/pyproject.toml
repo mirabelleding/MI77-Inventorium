@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "MI77-Utils"
+version = "0.1.0"
+description = "Reusable Python utilities by MI77-LAB."
+requires-python = ">=3.10"
+authors = [
+    { name = "MI77-LAB" }
+]
+
+dependencies = []
+
+[tool.setuptools.packages.find]
+include = ["mi77_utils*"]

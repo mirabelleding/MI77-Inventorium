@@ -25,46 +25,38 @@ recalc_engine/
 ├── recalc.py
 │
 ├── core/
-│   ├── __init__.py
 │   ├── transaction.py
 │   ├── pipeline.py
-│   ├── execution_plan.py
-│   └── results.py
+│   └── execution_plan.py
+│
 │
 ├── calculations/
 │   ├── base.py
 │   ├── ...
 │   └── ...
 │
-├── sources/
-│   ├── tables.py
-│   └── loaders.py
-│
 └── config/
     └── definitions.py
+    └── results.py
 ```
+```python
+# API
 RecalcEngine(transaction_id)
-
+```
 
 ---
 ```python
 # recalc.py
-from .core.transaction import Transaction
-from .core.pipeline import Pipeline
-
-
 class RecalcEngine:
 
-    def __init__(self, transaction_id):
-        self.transaction_id = transaction_id
+    def __init__(self, uuid):
+        self.uuid = uuid
 
     def run(self) -> RecalcResults:
-        transaction = Transaction(self.transaction_id)
+        self.transaction = Transaction(self.uuid)
+        self.execution_plan = Pipeline(transaction).compile()
 
-        pipeline = Pipeline(transaction)
-        pipeline.compile()
-
-        return pipeline.execute()
+        return pipeline.execute(self.execution_plan)
 ```
 ---
 ```python
@@ -72,14 +64,10 @@ class RecalcEngine:
 class Transaction:
 
     def __init__(self, transaction_id):
-        self.uuid = transaction_id
+        self.transaction_id = transaction_id
         self.transaction_type = ...
         self.process_month = ...
         self.data = self._get_data()
-
-    def _get_data(self):
-        stmt = ...
-        return load_df(stmt)
 
 ```
 ---
@@ -101,26 +89,11 @@ class Calculation(ABC):
 ```
 ```python
 # actual calculators
-class ExampleCalc(Calculation):
+class CalcA(Calculation):
 
-    ....
-
-    def if_triggered(self, transaction) -> Bool:
-
-        triggered = transaction.data[
-            transaction.data["measure_type_code"]
-            .isin(self.TRIGGER_MEASURE_TYPES)
-        ]
-
-        return (
-            triggered[
-                [
-                    "key record cols..."
-                ]
-            ]
-            .drop_duplicates()
-            .reset_index(drop=True)
-        )
+    @property
+    def is_triggered(self, transaction) -> Bool:
+        ...
 
     def calculate(self, ..) -> pd.DataFrame:
         ...
@@ -133,84 +106,45 @@ class ExecutionPlan:
 
     def __init__(self):
         self.calculations = {}
-        self._data_requirements = []
 
-    def add(self, calc, scopes, requirements):
-        self.calculations[calc] = scopes
-
-        if requirements is not None and not requirements.empty:
-            self._data_requirements.append(requirements)
-
-    def _evaluate_dataset(self):
-        supplementary = self._get_supplementary_data()
-        self._enrich_scopes(supplementary)
-
-    def _get_supplementary_data(self):
-
-        requirements = pd.concat(
-            self._data_requirements,
-            ignore_index=True,
-        ).drop_duplicates()
-
-        hierarchy_data = ...
-        group_data = ...
-
-        return hierarchy_data, group_data
-
-    def _enrich_scopes(self, supplementary):
+    def _evaluate_scope(self):
         ...
 
-```
+    def _get_supplementary_data(self):
+        ...
+
+    def construct_dataset(self):
+        ...groupby(hierarchy_id, stage).getgroup(...)
+
+    def build(self):
+        ...
+
+"""
 after pipeline compilations:
-```
+
 {
     CalcA(): calc_a_scopes,
     CalcB(): calc_b_scopes,
 }
+
+"""
 ```
 ---
 ```python
 # core/pipeline.py
 class Pipeline:
 
-    PIPE = (
-        ....
-    )
+    PIPE = [
+        CalcA,
+        CalcB,
+        ...
+    ]
 
     def __init__(self, transaction):
         self.transaction = transaction
-        self.execution_plan = None
-
 
     def compile(self):
-
-        plan = ExecutionPlan()
-
-        for Calc in self.PIPE:
-            calc = Calc()
-
-            scopes = calc.get_scopes(
-                self.transaction
-            )
-
-            if scopes.empty:
-                continue
-
-            requirements = calc.get_data_requirements(
-                scopes
-            )
-
-            plan.add(
-                calc=calc,
-                scopes=scopes,
-                requirements=requirements,
-            )
-
-        plan.prepare()
-
-        self.execution_plan = plan
-
-        return plan
+        return execution_plan
 
     def execute(self):
 
@@ -223,12 +157,10 @@ class Pipeline:
                 scopes=scopes,
                 results=results,
             )
-
             results.add(
                 calc.RESULT_ATTR,
                 records,
             )
-
         return results
 ```
 ---
@@ -260,31 +192,7 @@ class RecalcResults:
 ```
 ---
 ```python
-# sources/tables.py
-from db_reflection import ...
-
-... = refelct(...)
-
-
-```
----
-```python
-# sources/loaders.py
-def get_hierarchy_data(...):
-    stmt = ...
-
-    return load_df(stmt)
-
-
-def get_hierarchy_group_data(...):
-    stmt = ...
-
-    return load_df(stmt)
-
-```
----
-```python
 # config/definitions.py
 
-... some mapping
+... some mapping and table instances
 ```

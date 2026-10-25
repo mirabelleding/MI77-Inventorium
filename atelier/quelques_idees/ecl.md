@@ -23,10 +23,10 @@ Casacade
                                 │
                                 ▼
                         ModellingResults
-                            ├── RRMResults
-                            ├── SIRResults
-                            ├── FLAResults
-                            └── ECLResults
+                            ├── rrm: RRMResults
+                            ├── sir: SIRResults
+                            ├── fla: FLAResults
+                            └── ecl: ECLResults
 ```
 ```
 ECLModellingBatch
