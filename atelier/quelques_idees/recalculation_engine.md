@@ -1,18 +1,25 @@
 ```
-   RecalcEngine
-        │
-        ▼
-   Transaction
-        │
-        ▼
-     Pipeline
-    .compile() ──▶ ExecutionPlan
-    .execute() ◀────────┘
-        │
-        ▼
-  Calculations
-        │
-        ▼
+RecalcEngine
+    │
+    ▼
+Transaction
+    │
+    ▼
+Pipeline
+.compile() ──▶ ExecutionPlan
+    │              │
+.execute()         │
+    │              │
+    ▼              │
+  CalcA            │
+  CalcB ◀──────────┘
+  CalcC
+   ....
+    │
+    ▼
+ResultsCollector
+    │
+    ▼
  RecalcResults
    ├── table_a: DataFrame
    ├── table_b: DataFrame
@@ -27,8 +34,9 @@ recalc_engine/
 ├── core/
 │   ├── transaction.py
 │   ├── pipeline.py
-│   └── execution_plan.py
-│
+│   ├── execution_plan.py
+    ├── collector.py
+│   └── results.py
 │
 ├── calculations/
 │   ├── base.py
@@ -37,7 +45,7 @@ recalc_engine/
 │
 └── config/
     └── definitions.py
-    └── results.py
+
 ```
 ```python
 # API
@@ -76,8 +84,15 @@ class Transaction:
 class Calculation(ABC):
 
 # set or dict; for handing of cross-mth calculations
-    INPUT_MEASURE_TYPES = ...
-    OUTPUT_MEASURE_TYPE = ...
+    INPUT_MEASURE_TYPES = {
+        "measure_a": "...",
+        "measure_b": "...",
+        "beginning_measure": "...", # handling mth-offset calculations
+    }
+    OUTPUT_MEASURE_TYPE = {
+        "measure_type": "...",
+        "table": "...",
+    }
 
     @abstractmethod
     def if_triggered(self, transaction) -> Bool:
@@ -121,10 +136,9 @@ class ExecutionPlan:
 
 """
 after pipeline compilations:
-
 {
-    CalcA(): calc_a_scopes,
-    CalcB(): calc_b_scopes,
+    CalcA(): calc_a_scopes: DataFrame,
+    CalcB(): calc_b_scopes: DataFrame,
 }
 
 """
@@ -144,10 +158,10 @@ class Pipeline:
         self.transaction = transaction
 
     def compile(self):
+        ...
         return execution_plan
 
     def execute(self):
-
         results = RecalcResults()
 
         for calc, scopes in (
@@ -157,22 +171,20 @@ class Pipeline:
                 scopes=scopes,
                 results=results,
             )
-            results.add(
-                calc.RESULT_ATTR,
+            results.append(
+                calc.OUTPUT_MEASURE_TYPE["table"],
                 records,
             )
         return results
 ```
 ---
 ```python
-# core/results.py
-class RecalcResults:
+# core/collector.o=pt
+class ResultsCollector:
 
     def __init__(self):
-        self.table_1 = pd.DataFrame()
-        self.table_2 = pd.DataFrame()
-        self.table_3 = pd.DataFrame()
-
+        .....
+        self.result = RecalcResults()
 
     def append(self, target, records):  #e.g. results.append(table_1, records)
 
@@ -189,6 +201,14 @@ class RecalcResults:
                 ignore_index=True,
             ),
         )
+```
+```python
+# core/results.py
+@dataclass
+class RecalcResults:
+    table_1: pd.DataFrame()
+    table_2: pd.DataFrame()
+    table_3: pd.DataFrame()
 ```
 ---
 ```python
