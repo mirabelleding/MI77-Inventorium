@@ -1,24 +1,31 @@
-# Python Object Model
+# Python Object Model, Metaclasses & Introspection
 
-*A practical reference for `object`, `type`, metaclasses, inheritance, class metadata, the `inspect` module, and Python dunder methods.*
+*An extensive reference to Python object identity, classes, metaclasses, inheritance, attribute lookup, introspection, special methods, object lifetime, and object-oriented interfaces.*
 
 ## Table of Contents
 
 - [1. The big picture: instance → class → metaclass](#1-the-big-picture-instance--class--metaclass)
   - [`object` versus `type`](#object-versus-type)
   - [What about `int`, `str`, and `list`?](#what-about-int-str-and-list)
+  - [Object identity, references, and mutability](#object-identity-references-and-mutability)
 - [2. Creating classes with a metaclass](#2-creating-classes-with-a-metaclass)
   - [Meaning of the four arguments](#meaning-of-the-four-arguments)
   - [Which line creates `table_name`?](#which-line-creates-table_name)
   - [Creation sequence](#creation-sequence)
+  - [Complete class creation lifecycle](#complete-class-creation-lifecycle)
 - [3. One complete example: parent class + metaclass](#3-one-complete-example-parent-class--metaclass)
   - [An explicit override is possible](#an-explicit-override-is-possible)
   - [Metaclass conflicts](#metaclass-conflicts)
+  - [Class attributes versus instance attributes](#class-attributes-versus-instance-attributes)
+  - [`super()` and cooperative multiple inheritance](#super-and-cooperative-multiple-inheritance)
 - [4. Inspecting a class versus inspecting an instance](#4-inspecting-a-class-versus-inspecting-an-instance)
   - [Quick reference](#quick-reference)
   - [`vars()` and `__dict__`: direct attributes](#vars-and-__dict__-direct-attributes)
   - [`dir()`: discover available names](#dir-discover-available-names)
   - [Useful special class attributes](#useful-special-class-attributes)
+  - [Attribute lookup: the complete resolution order](#attribute-lookup-the-complete-resolution-order)
+  - [Method binding: functions, methods, `self`, and `cls`](#method-binding-functions-methods-self-and-cls)
+  - [`__slots__` and object storage](#__slots__-and-object-storage)
 - [5. The `inspect` module: examples of each function](#5-the-inspect-module-examples-of-each-function)
   - [5.1 `inspect.getmembers(obj)` — names AND values](#51-inspectgetmembersobj--names-and-values)
   - [5.2 `inspect.getmembers(User, inspect.isfunction)` — Python functions](#52-inspectgetmembersuser-inspectisfunction--python-functions)
@@ -47,8 +54,35 @@
   - [9.12 Callable instances: `__call__()`](#912-callable-instances-__call__)
   - [9.13 Subclass customization and special-method lookup](#913-subclass-customization-and-special-method-lookup)
   - [9.14 Quick selection guide](#914-quick-selection-guide)
-- [10. Five ideas to remember](#10-five-ideas-to-remember)
-  - [Mini practice exercises](#mini-practice-exercises)
+- [10. Object lifecycle, reference counting, and garbage collection](#10-object-lifecycle-reference-counting-and-garbage-collection)
+  - [10.1 Reference ownership and reachability](#101-reference-ownership-and-reachability)
+  - [10.2 CPython reference counting and cycles](#102-cpython-reference-counting-and-cycles)
+  - [10.3 Weak references and weak containers](#103-weak-references-and-weak-containers)
+  - [10.4 Finalizers, `__del__`, and deterministic cleanup](#104-finalizers-__del__-and-deterministic-cleanup)
+- [11. Abstract Base Classes (ABCs)](#11-abstract-base-classes-abcs)
+  - [11.1 `ABC`, `ABCMeta`, and `@abstractmethod`](#111-abc-abcmeta-and-abstractmethod)
+  - [11.2 Abstract properties and class methods](#112-abstract-properties-and-class-methods)
+  - [11.3 Abstract methods may still have implementations](#113-abstract-methods-may-still-have-implementations)
+  - [11.4 Virtual subclasses and what they do not provide](#114-virtual-subclasses-and-what-they-do-not-provide)
+  - [11.5 Inspecting an ABC and choosing the abstraction](#115-inspecting-an-abc-and-choosing-the-abstraction)
+- [12. Protocols and structural typing](#12-protocols-and-structural-typing)
+  - [12.1 Nominal versus structural contracts](#121-nominal-versus-structural-contracts)
+  - [12.2 Protocols can include attributes and multiple methods](#122-protocols-can-include-attributes-and-multiple-methods)
+  - [12.3 `@runtime_checkable`: limited runtime inspection](#123-runtime_checkable-limited-runtime-inspection)
+  - [12.4 Protocols versus ABCs](#124-protocols-versus-abcs)
+- [13. Class decorators versus metaclasses](#13-class-decorators-versus-metaclasses)
+  - [13.1 Class decorator: transform an already-created class](#131-class-decorator-transform-an-already-created-class)
+  - [13.2 `__init_subclass__`: automatically configure descendants](#132-__init_subclass__-automatically-configure-descendants)
+  - [13.3 Metaclass: customize the actual construction mechanism](#133-metaclass-customize-the-actual-construction-mechanism)
+  - [13.4 Comparison and selection guide](#134-comparison-and-selection-guide)
+- [14. Dynamic class creation](#14-dynamic-class-creation)
+  - [14.1 The three-argument form of `type()`](#141-the-three-argument-form-of-type)
+  - [14.2 Use the metaclass explicitly when appropriate](#142-use-the-metaclass-explicitly-when-appropriate)
+  - [14.3 `types.new_class()` and namespace initialization](#143-typesnew_class-and-namespace-initialization)
+  - [14.4 Dynamic subclasses and factories](#144-dynamic-subclasses-and-factories)
+- [15. Five ideas to remember](#15-five-ideas-to-remember)
+  - [Additional concepts at a glance](#additional-concepts-at-a-glance)
+  - [Python documentation references](#python-documentation-references)
 
 ---
 ## 1. The big picture: instance → class → metaclass
@@ -99,6 +133,88 @@ issubclass(int, type)         # False
 ```
 
 `int` is an **instance of `type`** and a **subclass of `object`**. It is **not** a subclass of `type`.
+
+
+### Object identity, references, and mutability
+
+Every Python object has three fundamental characteristics:
+
+| Characteristic | Meaning | Typical observation |
+| --- | --- | --- |
+| **Identity** | Which particular object this is | `id(obj)`, `a is b` |
+| **Type** | Which operations the object supports | `type(obj)`, `isinstance(obj, cls)` |
+| **Value/state** | Data represented or stored by the object | `obj == other`, object attributes |
+
+Variables in Python are **names bound to objects**, not boxes into which objects are copied. Assignment generally creates or changes a binding; it does not clone the object.
+
+```python
+first = [1, 2]
+second = first
+third = [1, 2]
+
+first is second
+first is third
+first == third
+
+second.append(3)
+first
+third
+```
+
+Expected results, in order: `True`, `False`, `True`, then `[1, 2, 3]` and `[1, 2]`. `first` and `second` name the same list, whereas `third` names an equal but distinct list.
+
+**Identity versus equality:** `is` and `is not` compare object identity; `==` delegates to equality behavior (usually `__eq__`). Prefer `x is None` rather than `x == None`. Avoid relying on whether separately constructed integers or strings happen to have the same identity: interning and implementation optimizations can affect the answer.
+
+#### Mutability belongs to the object, not the variable
+
+- Mutable objects, such as lists, dictionaries, and most ordinary class instances, can change their internal state while retaining their identity.
+- Immutable objects, such as integers, strings, and tuples, cannot change their value *in place*. Rebinding a name is still possible.
+- An immutable container may refer to mutable objects. A tuple containing a list cannot change its tuple entries, but the contained list can change.
+
+```python
+number = 10
+before = number
+number += 1
+
+number == before
+number is before
+
+record = ([1, 2], "active")
+record[0].append(3)
+record
+```
+
+The comparisons are `False` and `False`; the tuple is now `([1, 2, 3], 'active')`. The tuple's reference to the list is unchanged, although the list contents changed.
+
+#### Passing references to functions
+
+Python uses **call by sharing** (also described as passing object references by assignment). A function receives a local name bound to the same object; mutation is visible outside, but rebinding the parameter does not rebind the caller's name.
+
+```python
+def mutate(items):
+    items.append("added")
+
+
+def rebind(items):
+    items = ["replacement"]
+    return items
+
+
+values = ["original"]
+mutate(values)
+new_values = rebind(values)
+
+values
+new_values
+```
+
+`values` is `['original', 'added']`; `new_values` is `['replacement']`. This distinction matters for methods that modify a DataFrame, a configuration dictionary, or a mutable object passed through a processing pipeline.
+
+#### `id()`, identity, and lifetime
+
+`id(obj)` returns an integer unique among **simultaneously existing objects**. In CPython it is typically related to a memory address, but that is an implementation detail; an ID may be reused after an object is destroyed. `id()` is useful for debugging aliasing, not for permanent IDs, database keys, or serialization.
+
+**Related sections:** equality and hashing in Section 9.8; object cleanup and weak references in Section 10.
 
 ---
 
@@ -164,6 +280,102 @@ Assign the created class object to its name (e.g. User)
 ```
 
 A metaclass can also implement `__prepare__`, `__init__`, and `__call__`; this example focuses on `__new__`, which customizes **class construction**. The metaclass's `__call__` can influence **instance creation**.
+
+
+### Complete class creation lifecycle
+
+The simplified creation sequence above is useful, but Python exposes additional hooks. The full conceptual sequence for a normal `class` statement is:
+
+1. Evaluate decorators and the class header; resolve non-type bases through `__mro_entries__` where applicable.
+2. Determine the most-derived compatible metaclass from explicit and inherited metaclasses.
+3. Ask the metaclass for the class namespace through `__prepare__` (if defined).
+4. Execute the class body in that namespace: assignments create names, and `def` creates function objects.
+5. Invoke the metaclass to construct the class object; typically its `__call__` runs metaclass `__new__` and `__init__`.
+6. During `type.__new__`, call `__set_name__(owner, name)` on descriptors defined in the new class namespace, then the immediate parent's `__init_subclass__` hook.
+7. Apply class decorators from the **bottom up**; bind the resulting object to the class name.
+8. Later, when you invoke the completed class (`Class(...)`), the metaclass's `__call__` generally runs instance `__new__` followed by `__init__`.
+
+The details of steps 5–6 assume a metaclass that delegates class construction to `type.__new__`. A metaclass that replaces the usual machinery may behave differently.
+
+#### Trace the hooks in their actual order
+
+```python
+events = []
+
+
+class TraceMeta(type):
+    @classmethod
+    def __prepare__(mcls, name, bases, **kwargs):
+        events.append("prepare")
+        return {}
+
+    def __new__(mcls, name, bases, namespace, **kwargs):
+        events.append("metaclass new: before")
+        cls = super().__new__(mcls, name, bases, namespace, **kwargs)
+        events.append("metaclass new: after")
+        return cls
+
+    def __init__(cls, name, bases, namespace, **kwargs):
+        events.append("metaclass init")
+        super().__init__(name, bases, namespace)
+
+
+class Root(metaclass=TraceMeta):
+    def __init_subclass__(cls, **kwargs):
+        events.append("init_subclass")
+        super().__init_subclass__(**kwargs)
+
+
+events.clear()
+
+
+class Field:
+    def __set_name__(self, owner, name):
+        events.append("set_name")
+
+
+def register(cls):
+    events.append("decorator")
+    return cls
+
+
+@register
+class Record(Root):
+    events.append("class body")
+    field = Field()
+
+
+events
+```
+
+Expected sequence:
+
+```text
+['prepare', 'class body', 'metaclass new: before',
+ 'set_name', 'init_subclass', 'metaclass new: after',
+ 'metaclass init', 'decorator']
+```
+
+**What each hook can do:**
+
+| Hook | Receives or observes | Typical use |
+| --- | --- | --- |
+| `Meta.__prepare__` | Class name, bases, class keywords | Supply the namespace mapping used by the class body |
+| `Meta.__new__` | Name, bases, populated namespace | Validate or transform the class before returning it |
+| Descriptor `__set_name__` | Constructed owner class and assigned field name | Set descriptor storage names |
+| `Base.__init_subclass__` | Newly created subclass and class keywords | Lightweight subclass configuration or registration |
+| `Meta.__init__` | Constructed class | Final class initialization |
+| `@class_decorator` | Constructed class object | Register, mutate, or replace the class |
+| `Meta.__call__` | Calls to the completed class | Control creation of *instances* of that class |
+
+#### Important subtleties
+
+- `__prepare__` must return a mapping, usually a dictionary. Ordered dictionaries are no longer necessary merely to preserve ordinary class-definition order because modern dictionaries preserve insertion order.
+- `__init_subclass__` runs **as part of `type.__new__`**, before a custom metaclass's `__new__` has returned. It is not the same hook as metaclass `__init__`.
+- `__set_name__` is automatically called for descriptors present during class creation. Assigning a descriptor to a class *later* does not automatically call that hook.
+- Metaclass keywords can be forwarded through class creation and `__init_subclass__`; a custom metaclass must deliberately manage those keyword arguments.
+- When implementing a custom metaclass `__new__`, preserve the compiler-generated `__classcell__` in the namespace passed to `type.__new__`. Zero-argument `super()` relies on this mechanism.
+- Multiple inheritance and metaclass conflicts are discussed in Section 3; class decorators versus metaclasses are compared in Section 13.
 
 ---
 
@@ -265,6 +477,177 @@ class Mixed(BaseModel, OtherBase, metaclass=CombinedMeta):
     pass
 ```
 
+
+### Class attributes versus instance attributes
+
+The class namespace (`Class.__dict__`) and each normal instance namespace (`instance.__dict__`) are distinct. Attribute access can *find* class attributes through inheritance without copying those attributes into each instance.
+
+```python
+class Connection:
+    timeout = 30
+
+    def __init__(self, name):
+        self.name = name
+
+
+first = Connection("primary")
+second = Connection("replica")
+
+first.timeout
+vars(first)
+Connection.__dict__["timeout"]
+```
+
+Results: `30`, `{'name': 'primary'}`, and `30`. `timeout` is not initially stored on either instance.
+
+#### Instance shadowing and class rebinding
+
+```python
+first.timeout = 60
+
+first.timeout
+second.timeout
+Connection.timeout
+vars(first)
+
+Connection.timeout = 45
+second.timeout
+first.timeout
+```
+
+Results: `60`, `30`, `30`, `{'name': 'primary', 'timeout': 60}`, then `45` and `60`. For a normal class attribute, assigning `first.timeout` creates/shadows the name in `first` rather than changing `Connection.timeout`. The shadowed value is unaffected by a later class-level rebinding.
+
+#### Shared mutable class attributes: a common bug
+
+```python
+class Registry:
+    entries = []
+
+    def add(self, value):
+        self.entries.append(value)
+
+
+left = Registry()
+right = Registry()
+left.add("A")
+right.entries
+```
+
+The final result is `['A']`: both instances access the same mutable class list. If per-instance state is desired, create it in `__init__` instead:
+
+```python
+class Registry:
+    def __init__(self):
+        self.entries = []
+
+    def add(self, value):
+        self.entries.append(value)
+```
+
+#### Incrementing class-level counters deliberately
+
+```python
+class Task:
+    created = 0
+
+    def __init__(self):
+        type(self).created += 1
+
+
+Task()
+Task()
+Task.created
+```
+
+The result is `2`. Contrast this with `self.created += 1`, which typically reads the class attribute and then **writes a separate instance attribute**. Also note that `type(self).created += 1` can create a counter on a subclass rather than update the base class; choose `Task.created += 1` when the counter must be shared across the entire inheritance tree.
+
+#### Methods and data are both class attributes
+
+`def` inside a class body assigns a function object to the class namespace. An instance's access to this function triggers **method binding** (see below), while a simple integer or string class attribute is just returned. This is why ordinary instance methods need not be copied into every instance.
+
+### `super()` and cooperative multiple inheritance
+
+`super()` is a **dynamic lookup proxy**, not a synonym for “call my direct parent.” In an instance method, zero-argument `super()` effectively carries the class where the method was defined and the current instance. Lookup continues **after that class in the instance's MRO**.
+
+#### The diamond hierarchy
+
+```text
+       Root
+      /    \
+    Left  Right
+      \    /
+       Child
+```
+
+```python
+class Root:
+    def trace(self):
+        return ["Root"]
+
+
+class Left(Root):
+    def trace(self):
+        return ["Left", *super().trace()]
+
+
+class Right(Root):
+    def trace(self):
+        return ["Right", *super().trace()]
+
+
+class Child(Left, Right):
+    def trace(self):
+        return ["Child", *super().trace()]
+
+
+Child.__mro__
+Child().trace()
+```
+
+Results:
+
+```text
+(Child, Left, Right, Root, object)
+['Child', 'Left', 'Right', 'Root']
+```
+
+Even though `Left` directly inherits from `Root`, `super()` **inside `Left.trace`** proceeds to `Right.trace` when operating on a `Child` instance. This is the key to cooperative multiple inheritance and the C3 linearization algorithm.
+
+#### `super()` in constructors
+
+```python
+class DatabaseMixin:
+    def __init__(self, **kwargs):
+        self.database_ready = True
+        super().__init__(**kwargs)
+
+
+class LoggingMixin:
+    def __init__(self, **kwargs):
+        self.logging_ready = True
+        super().__init__(**kwargs)
+
+
+class Service(DatabaseMixin, LoggingMixin):
+    def __init__(self):
+        super().__init__()
+
+
+service = Service()
+service.database_ready, service.logging_ready
+Service.__mro__
+```
+
+Both flags are `True`, because each participant forwards construction to the **next method in the MRO**. The rightmost terminal `object.__init__()` must not receive unexpected arguments; cooperative hierarchies typically consume their own keyword arguments and forward the remainder.
+
+#### Key rules for multiple inheritance
+
+- **C3 linearization** preserves local base ordering and respects the ordering inherited from each parent. Inconsistent bases produce a `TypeError` when defining a class.
+- Every participating override should normally call `super()` exactly once, and signatures should be designed to cooperate. A parent that omits `super()` can terminate the chain early.
+- `super(CurrentClass, obj)` is the explicit proxy form; `super()` without arguments is intended for normal methods defined in the class body.
+- An explicit `Parent.method(self)` bypasses cooperative lookup and can lead to duplicated or missing calls in a diamond hierarchy.
+- `super()` also works in many class methods. Both it and ordinary method binding are implemented through descriptor-aware attribute lookup.
+
 ---
 
 ## 4. Inspecting a class versus inspecting an instance
@@ -332,6 +715,236 @@ User.__mro__                    # (User, BaseModel, object)
 User.__module__                 # Usually '__main__' in a script
 User.__class__ is TableMeta     # True
 ```
+
+
+### Attribute lookup: the complete resolution order
+
+For a **normal instance** whose class uses the usual `object.__getattribute__` implementation, reading `instance.name` roughly follows the precedence below. Python first searches the class's MRO for a candidate class attribute or descriptor; the outcome depends on the type of that candidate.
+
+```text
+instance.name
+    │
+    ├─ Data descriptor in class/MRO? ──────────────► call __get__
+    │
+    ├─ Instance's __dict__ has name? ─────────────► return stored value
+    │
+    ├─ Non-data descriptor in class/MRO? ─────────► call __get__
+    │
+    ├─ Ordinary class/MRO attribute? ─────────────► return class value
+    │
+    └─ No attribute resolved? ─────────────────────► __getattr__ fallback
+```
+
+This represents Python's **default** lookup behavior, not an unchangeable rule for classes overriding `__getattribute__` or for all extension types. A `__getattribute__` implementation that raises `AttributeError` can also cause `__getattr__` to run.
+
+| Candidate | Defines | Relative precedence |
+| --- | --- | --- |
+| Data descriptor | `__get__` and `__set__` or `__delete__` | Above instance dictionary |
+| Instance attribute | Entry in `instance.__dict__` | Above non-data descriptors and normal class attributes |
+| Non-data descriptor | `__get__` but no `__set__`/`__delete__` | Below instance dictionary |
+| Ordinary class attribute | Class or inherited namespace entry | Below instance dictionary |
+| `__getattr__` | Fallback on failed regular lookup | Last resort |
+
+#### Data descriptors beat instance attributes
+
+Properties commonly act as data descriptors, even if they have no setter:
+
+```python
+class Profile:
+    def __init__(self, name):
+        self._name = name
+
+    @property
+    def name(self):
+        return self._name.upper()
+
+
+profile = Profile("alice")
+profile.__dict__["name"] = "shadow"
+
+profile.name
+vars(profile)
+```
+
+`profile.name` returns `'ALICE'` even though `vars(profile)` includes `'name': 'shadow'`: the class property takes precedence over the instance dictionary. Assigning `profile.name = ...` through ordinary attribute assignment would instead raise an `AttributeError` because no property setter exists.
+
+#### Normal methods are non-data descriptors
+
+```python
+class Greeter:
+    def greet(self):
+        return "original"
+
+
+greeter = Greeter()
+greeter.greet()
+greeter.__dict__["greet"] = lambda: "overridden"
+greeter.greet()
+Greeter.greet(greeter)
+```
+
+Results: `'original'`, `'overridden'`, `'original'`. A function stored on a class supports binding through `__get__` but is a non-data descriptor; an instance attribute of the same name can hide it.
+
+#### Class lookup is not instance lookup
+
+`Class.name` invokes class-object attribute lookup (normally `type.__getattribute__`), which is different from `instance.name` (normally `object.__getattribute__`). Class lookup consults both the class's own MRO and its metaclass's attributes/descriptors. For instance, a **metaclass property** can take precedence over an attribute in the class namespace.
+
+```python
+class Meta(type):
+    @property
+    def label(cls):
+        return "from metaclass"
+
+
+class Report(metaclass=Meta):
+    label = "from class"
+
+
+Report.label
+vars(Report)["label"]
+```
+
+The first result is `'from metaclass'`; the second is `'from class'`. The distinction matters when debugging custom metaclasses.
+
+#### Introspection without invoking the attribute
+
+```python
+import inspect
+
+inspect.getattr_static(profile, "name")
+getattr(profile, "name")
+```
+
+The first returns the **property descriptor itself**; the second returns `'ALICE'`. See Section 5.9 and Section 9.10 for further descriptor-related tools and methods.
+
+### Method binding: functions, methods, `self`, and `cls`
+
+An ordinary function defined in a class becomes a **bound method** when accessed through an instance. The binding process uses the function object's descriptor protocol; it is not a special transformation of the source code when the function is defined.
+
+```python
+class Account:
+    def deposit(self, amount):
+        return amount * 2
+
+
+account = Account()
+raw_function = Account.__dict__["deposit"]
+bound_method = account.deposit
+
+raw_function is Account.deposit
+bound_method.__self__ is account
+bound_method.__func__ is raw_function
+bound_method(5)
+Account.deposit(account, 5)
+```
+
+Results: `True`, `True`, `True`, `10`, `10`. Access through the instance supplies `self` automatically; retrieving `Account.deposit` from the class does **not** bind a particular account instance.
+
+#### Explicit descriptor binding
+
+```python
+manual = Account.__dict__["deposit"].__get__(account, Account)
+manual.__self__ is account
+manual(5)
+```
+
+Results: `True` and `10`. This illustrates why `instance.method(x)` and `Class.method(instance, x)` commonly have the same effect.
+
+| Definition | Accessed as | What is bound? | Typical inspection |
+| --- | --- | --- | --- |
+| Ordinary `def f(self, ...)` | `obj.f` | Instance (`self`) | `obj.f.__self__ is obj` |
+| Ordinary `def f(self, ...)` | `Class.f` | Nothing | Function object |
+| `@classmethod def f(cls, ...)` | `obj.f` or `Class.f` | Class (`cls`) | `Class.f.__self__ is Class` |
+| `@staticmethod def f(...)` | `obj.f` or `Class.f` | Nothing | Function object |
+| `@property def f(self)` | `obj.f` | No bound method returned; descriptor **evaluates** getter | Getter result |
+
+#### Class methods versus static methods
+
+```python
+class Parser:
+    kind = "base"
+
+    @classmethod
+    def describe(cls):
+        return cls.kind
+
+    @staticmethod
+    def normalize(value):
+        return value.strip().lower()
+
+
+class JsonParser(Parser):
+    kind = "json"
+
+
+Parser.describe()
+JsonParser.describe()
+JsonParser.describe.__self__ is JsonParser
+JsonParser.normalize("  DATA  ")
+```
+
+Results: `'base'`, `'json'`, `True`, and `'data'`. A class method naturally follows subclasses through `cls`, while a static method is merely a function namespaced on the class. Neither decorator is required just because code appears inside a class: choose based on whether the implementation needs instance state or the class object.
+
+**Identity of bound methods:** repeated access to `account.deposit` may create different temporary bound-method objects, even though they bind the same instance and function. Inspect `__self__` and `__func__` instead of assuming `account.deposit is account.deposit`.
+
+### `__slots__` and object storage
+
+Ordinary Python instances typically store writable attributes in an instance dictionary. Declaring `__slots__` asks Python to create a fixed set of storage descriptors, often reducing the memory footprint when many instances have the same fields.
+
+```python
+class Point:
+    __slots__ = ("x", "y")
+
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+
+point = Point(2, 3)
+point.x
+hasattr(point, "__dict__")
+```
+
+Results: `2` and `False`. Assigning `point.z = 4` raises `AttributeError`, unless a parent class grants a `__dict__`.
+
+#### Slots are descriptors, not a frozen-object feature
+
+```python
+Point.__dict__["x"]
+point.x = 8
+point.x
+```
+
+The first expression returns a slot descriptor; the later result is `8`. Slots restrict **which fields** may be stored, not whether an existing field is mutable. They do not create immutability, enforce types, or automatically validate values.
+
+#### `__dict__` and weak-reference support
+
+```python
+class FlexiblePoint:
+    __slots__ = ("x", "y", "__dict__", "__weakref__")
+
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+
+flexible = FlexiblePoint(1, 2)
+flexible.label = "origin"
+vars(flexible)
+```
+
+`vars(flexible)` contains `{'label': 'origin'}`; the slotted `x` and `y` values are stored outside that instance dictionary. The `__weakref__` slot allows instances of this simple slotted class to be targets of `weakref.ref()`.
+
+#### Inheritance rules and pitfalls
+
+- A subclass of a slotted class that **omits** `__slots__` normally gains an instance dictionary again. Declare `__slots__ = ()` on the subclass when you want to preserve the slotted layout without adding new slots.
+- If any base already provides `__dict__` or weak-reference support, declaring slots in a subclass does not remove those capabilities.
+- Multiple inheritance among classes with nonempty slot layouts is restricted and can raise `TypeError` due to layout conflicts.
+- Do not redeclare the same slot name already used by an ancestor; this can make the ancestor's slot inaccessible through ordinary lookup.
+- Avoid using a class attribute to provide a default value under the **same name** as a slot: it conflicts with the descriptor generated for that name.
+- `sys.getsizeof(obj)` measures only the object's shallow size. To compare memory use fairly, account for separate instance dictionaries and any referenced data.
+
+**Selection:** use `__slots__` when instances are numerous and have predictable fields, after measuring benefit; prefer ordinary dictionaries when flexible attributes, framework integrations, or simpler debugging matter more.
 
 ---
 
@@ -993,7 +1606,554 @@ Don't confuse **special methods** (callable hooks like `__len__`) with **special
 
 ---
 
-## 10. Five ideas to remember
+## 10. Object lifecycle, reference counting, and garbage collection
+
+The lifetime of an ordinary object runs from **allocation and initialization**, through a period of reachable use, to eventual finalization and memory reclamation. The `__new__`/`__init__` construction hooks are covered in Section 9.2; this section concerns what happens **after** an object is created.
+
+### 10.1 Reference ownership and reachability
+
+Names, containers, instance attributes, and some interpreter internals may all hold references to the same object. Deleting one name does **not** necessarily destroy that object if other references remain.
+
+```python
+class Item:
+    pass
+
+
+item = Item()
+alias = item
+original_id = id(item)
+del item
+
+id(alias) == original_id
+```
+
+The result is `True`: removing the binding `item` does not remove `alias`. Conversely, `del alias` removes a binding, not an object through a dedicated object-destruction operator.
+
+### 10.2 CPython reference counting and cycles
+
+CPython ordinarily reclaims many objects promptly when their reference count drops to zero. Cycles need an additional cyclic garbage collector because objects in a cycle can still reference one another after external references disappear.
+
+```python
+import gc
+import weakref
+
+
+class Node:
+    pass
+
+
+left = Node()
+right = Node()
+left.next = right
+right.next = left
+left_ref = weakref.ref(left)
+right_ref = weakref.ref(right)
+
+del left, right
+gc.collect()
+
+left_ref() is None, right_ref() is None
+```
+
+Normally both results are `True` on CPython after collection, provided nothing else retains the objects. The example illustrates a collectable reference cycle; collector behavior and timing can vary by Python implementation and object type.
+
+| API | Purpose | Important qualification |
+| --- | --- | --- |
+| `sys.getrefcount(obj)` | Inspect an approximate CPython reference count | The call itself holds a temporary reference; CPython-specific |
+| `gc.collect()` | Request garbage collection | Does not free objects that are still reachable |
+| `gc.get_stats()` | Get collector statistics | Implementation and version details can vary |
+| `gc.is_tracked(obj)` | Ask whether an object participates in cyclic GC | Some immutable/container objects are untracked |
+| `weakref.ref(obj)` | Create a reference that does not keep the object alive | Target must support weak references |
+
+**Important distinction:** Python's language semantics do not guarantee precisely when memory is reclaimed. Never rely on timely garbage collection as the primary way to close a file, release a lock, or commit/rollback a database transaction.
+
+### 10.3 Weak references and weak containers
+
+A **weak reference** lets you observe an object without prolonging its lifetime. Calling it returns the object if still alive, or `None` after it has been collected.
+
+```python
+import weakref
+
+
+class CacheEntry:
+    pass
+
+
+entry = CacheEntry()
+observer = weakref.ref(entry)
+observer() is entry
+
+del entry
+observer() is None
+```
+
+On CPython, the final expression is ordinarily `True` because no strong references remain. Do not retain the result of `observer()` somewhere else if you intend the object to be collectable.
+
+`weakref.WeakValueDictionary` is useful when you want cached values to disappear automatically after no other strong references remain. `weakref.WeakKeyDictionary` is useful for supplemental per-object metadata without keeping those keys alive. For slotted user classes, include `__weakref__` when necessary (Section 4).
+
+### 10.4 Finalizers, `__del__`, and deterministic cleanup
+
+`__del__` is a finalization hook, **not** the inverse of `__init__`. The interpreter may call it when an object is finalized, but its precise timing is not dependable; exceptions raised in it are ignored with a warning, and shutdown can complicate access to module globals.
+
+```python
+from contextlib import contextmanager
+
+
+@contextmanager
+def managed_resource():
+    resource = open("sample.txt", "w")
+    try:
+        yield resource
+    finally:
+        resource.close()
+
+
+with managed_resource() as handle:
+    handle.write("ready")
+```
+
+The `with` statement guarantees normal block-exit cleanup (including exceptions within the block) independently of garbage-collection timing. Prefer built-in context managers, `try`/`finally`, or `contextlib` for resources. `weakref.finalize` can provide a fallback cleanup callback without writing `__del__`, but it is not a substitute for explicit resource management.
+
+---
+
+## 11. Abstract Base Classes (ABCs)
+
+An **abstract base class** defines a nominal interface and can prevent instantiation until required abstract members have concrete implementations. It is appropriate when subclasses are intentionally part of the same inheritance family and must conform to a shared contract.
+
+### 11.1 `ABC`, `ABCMeta`, and `@abstractmethod`
+
+```python
+from abc import ABC, abstractmethod
+
+
+class Calculator(ABC):
+    @abstractmethod
+    def calculate(self, amount: float) -> float:
+        raise NotImplementedError
+
+
+class TaxCalculator(Calculator):
+    def __init__(self, rate: float):
+        self.rate = rate
+
+    def calculate(self, amount: float) -> float:
+        return amount * self.rate
+
+
+calc = TaxCalculator(0.13)
+calc.calculate(100)
+```
+
+The result is `13.0`. `Calculator()` raises `TypeError` because `calculate` is abstract; `TaxCalculator` is concrete because it supplies an implementation.
+
+`ABC` is a helper class that uses `ABCMeta`. You can use `metaclass=ABCMeta` directly, but `ABC` is usually clearer. Decorating a method with `@abstractmethod` sets its abstract status; `ABCMeta` enforces that status at instantiation.
+
+### 11.2 Abstract properties and class methods
+
+```python
+from abc import ABC, abstractmethod
+
+
+class DataSource(ABC):
+    @property
+    @abstractmethod
+    def source_name(self) -> str:
+        ...
+
+    @classmethod
+    @abstractmethod
+    def connect(cls):
+        ...
+
+
+class LocalSource(DataSource):
+    @property
+    def source_name(self) -> str:
+        return "local"
+
+    @classmethod
+    def connect(cls):
+        return cls()
+
+
+LocalSource.connect().source_name
+```
+
+The result is `'local'`. When stacking decorators, `@abstractmethod` should normally be **innermost** for `@property`, `@classmethod`, and `@staticmethod` combinations.
+
+### 11.3 Abstract methods may still have implementations
+
+Unlike an empty interface declaration in some languages, an abstract method may contain useful code; subclasses may call it with `super()` while still being required to override it.
+
+```python
+class Processor(ABC):
+    @abstractmethod
+    def calculate(self, value):
+        return value * 2
+
+
+class FinalProcessor(Processor):
+    def calculate(self, value):
+        return super().calculate(value) + 1
+
+
+FinalProcessor().calculate(3)
+```
+
+The result is `7`.
+
+### 11.4 Virtual subclasses and what they do not provide
+
+An ABC can register an unrelated class as a **virtual subclass** for `isinstance`/`issubclass` checks:
+
+```python
+from abc import ABC
+
+
+class Repository(ABC):
+    pass
+
+
+class MemoryStore:
+    pass
+
+
+Repository.register(MemoryStore)
+issubclass(MemoryStore, Repository)
+isinstance(MemoryStore(), Repository)
+```
+
+Both checks are `True`, but **registration does not alter `MemoryStore.__mro__`, inject methods, or enforce abstract-method implementation**. It grants recognition in runtime subtype checks, not inherited implementation.
+
+For standard collection interfaces, examine `collections.abc` (`Iterable`, `Mapping`, `Sequence`, etc.) before defining a custom ABC.
+
+### 11.5 Inspecting an ABC and choosing the abstraction
+
+```python
+import inspect
+
+inspect.isabstract(Calculator)
+Calculator.__abstractmethods__
+```
+
+The first result is `True`; the second is a frozenset containing `'calculate'`.
+
+| Choose | When |
+| --- | --- |
+| Plain base class | Sharing behavior without mandatory abstract members |
+| `ABC` and `@abstractmethod` | Requiring implementations from a known subclass family |
+| `Protocol` (Section 12) | Specifying the operations an object must support without requiring inheritance |
+| `__init_subclass__` | Validating or configuring new subclasses at definition time |
+
+**Metaclass caution:** `ABCMeta` is itself a metaclass. Combining an ABC with a second unrelated custom metaclass may require a compatible combined metaclass (see Section 3).
+
+---
+
+## 12. Protocols and structural typing
+
+A **protocol** describes the structure or behavior an object must provide. Unlike nominal inheritance, **structural subtyping** does not require classes to inherit from the interface explicitly. This formalizes the practical Python idea of **duck typing**.
+
+### 12.1 Nominal versus structural contracts
+
+```python
+from typing import Protocol
+
+
+class Calculates(Protocol):
+    def calculate(self, amount: float) -> float:
+        ...
+
+
+class RateModel:
+    def __init__(self, rate: float):
+        self.rate = rate
+
+    def calculate(self, amount: float) -> float:
+        return amount * self.rate
+
+
+def evaluate(model: Calculates, amount: float) -> float:
+    return model.calculate(amount)
+
+
+evaluate(RateModel(0.2), 100)
+```
+
+The result is `20.0`. A static type checker can accept `RateModel` as a `Calculates` implementation even though `RateModel` does not inherit from `Calculates`. Type annotations are not, by themselves, runtime argument validation.
+
+### 12.2 Protocols can include attributes and multiple methods
+
+```python
+from typing import Protocol
+
+
+class NamedLoader(Protocol):
+    source: str
+
+    def load(self) -> list[int]:
+        ...
+
+
+class CsvLoader:
+    source = "csv"
+
+    def load(self) -> list[int]:
+        return [1, 2, 3]
+
+
+def describe(loader: NamedLoader) -> tuple[str, int]:
+    return loader.source, len(loader.load())
+
+
+describe(CsvLoader())
+```
+
+The result is `('csv', 3)`. The annotated protocol attribute `source` is part of the structural requirement, not an attribute automatically created on implementing classes.
+
+### 12.3 `@runtime_checkable`: limited runtime inspection
+
+```python
+from typing import Protocol, runtime_checkable
+
+
+@runtime_checkable
+class SupportsSave(Protocol):
+    def save(self) -> None:
+        ...
+
+
+class Record:
+    def save(self) -> str:
+        return "done"
+
+
+isinstance(Record(), SupportsSave)
+```
+
+This returns `True`: runtime protocol checking only looks for required members; it **does not validate signatures, return annotations, or the semantics of those members**. A static type checker should reject `Record` as an implementation of `SupportsSave` because its `save` return type is incompatible.
+
+Additional caveats:
+
+- Protocols without `@runtime_checkable` generally cannot be used as runtime `isinstance`/`issubclass` targets.
+- Runtime-checkable protocol checks can be slower than ordinary class checks; structural checks also have restrictions, particularly for protocols with data members and `issubclass`.
+- In Python 3.12 and later, runtime protocol member lookup uses static attribute inspection; dynamically generated attributes may not be treated like ordinary accessed attributes.
+- Do not use `@runtime_checkable` as a substitute for detailed validation or a static type checker.
+
+### 12.4 Protocols versus ABCs
+
+| Dimension | ABC | Protocol |
+| --- | --- | --- |
+| Primary relationship | Nominal inheritance | Structural compatibility |
+| Explicit inheritance required for normal use | Yes | No |
+| Prevents instantiating incomplete implementations | Yes (for concrete subclasses) | Not for independent classes that happen to match structurally |
+| Supports shared implementations | Yes | May define implementations for explicit subclasses, but normally describes a contract |
+| Type-checker support | Yes | Yes |
+| Runtime membership checks | Built in | Opt-in with `@runtime_checkable`, limited |
+| Best fit | Framework-owned class hierarchy | Pluggable libraries, dependency injection, loose coupling |
+
+**Architecture example:** annotate a calculation pipeline's dependency as a protocol such as `DataLoader` or `Calculator` if it only needs `load()` or `calculate()`; use an ABC if you also need shared state, implementations, and enforced construction rules across your own hierarchy.
+
+---
+
+## 13. Class decorators versus metaclasses
+
+Both class decorators and metaclasses can customize a class, but they operate at different points of class construction and expose different mechanisms.
+
+### 13.1 Class decorator: transform an already-created class
+
+```python
+REGISTRY = {}
+
+
+def register(cls):
+    REGISTRY[cls.__name__] = cls
+    return cls
+
+
+@register
+class CsvHandler:
+    def process(self):
+        return "csv"
+
+
+REGISTRY["CsvHandler"] is CsvHandler
+```
+
+The result is `True`. `register` receives the completed class and stores it in a registry. A class decorator may also add attributes or return a **replacement object**, so it need not return the original class.
+
+This is analogous to writing:
+
+```python
+class JsonHandler:
+    pass
+
+
+JsonHandler = register(JsonHandler)
+```
+
+Decorators on a class are applied bottom-to-top, just as multiple function decorators are:
+
+```python
+@outer
+@inner
+class Example:
+    pass
+```
+
+This is conceptually `Example = outer(inner(Example))`, assuming the decorators are already defined.
+
+### 13.2 `__init_subclass__`: automatically configure descendants
+
+```python
+class BaseHandler:
+    handlers = {}
+
+    def __init_subclass__(cls, *, kind, **kwargs):
+        super().__init_subclass__(**kwargs)
+        BaseHandler.handlers[kind] = cls
+
+
+class XmlHandler(BaseHandler, kind="xml"):
+    pass
+
+
+BaseHandler.handlers["xml"] is XmlHandler
+```
+
+The result is `True`. Unlike a decorator, the inherited `__init_subclass__` mechanism can respond automatically to each newly defined subclass, and it runs during class construction rather than afterward.
+
+### 13.3 Metaclass: customize the actual construction mechanism
+
+```python
+class NamingMeta(type):
+    def __new__(mcls, name, bases, namespace):
+        if name != "Base" and not name.endswith("Service"):
+            raise TypeError("Concrete service classes must end in Service")
+        return super().__new__(mcls, name, bases, namespace)
+
+
+class Base(metaclass=NamingMeta):
+    pass
+
+
+class EmailService(Base):
+    pass
+```
+
+The metaclass checks and can reject the class before construction completes. This supports advanced behaviors that post-creation decorators cannot implement as naturally, such as supplying a custom namespace via `__prepare__` or integrating a family of classes under the same class-creation policy.
+
+### 13.4 Comparison and selection guide
+
+| Mechanism | Timing | Applies to subclasses automatically? | Best use |
+| --- | --- | --- | --- |
+| Class decorator | After class object creation | No, normally must decorate each class | Register or transform specific classes |
+| `__init_subclass__` | During creation of a new subclass | Yes, via inheritance | Validate, configure, or register descendants |
+| Custom metaclass | Before/during class object creation | Usually inherited through metaclass selection | Alter namespace preparation or class construction |
+
+**Recommended escalation:** ordinary class or instance methods → class decorator → `__init_subclass__` → metaclass, as needed. A metaclass adds an extra compatibility constraint when different base classes use different metaclasses. See Section 2 for metaclass construction hooks and Section 3 for conflicts.
+
+---
+
+## 14. Dynamic class creation
+
+Because classes are objects, Python can create them programmatically instead of using literal `class` statements. Dynamic classes are useful for framework-generated models, test fixtures, configuration-driven types, and adapter factories—but excessive use can make debugging and static analysis harder.
+
+### 14.1 The three-argument form of `type()`
+
+The single-argument form `type(obj)` returns an object's class. The **three-argument** form constructs a new class:
+
+```python
+def greet(self):
+    return f"Hello, {self.name}"
+
+
+User = type("User", (object,), {"greet": greet})
+user = User()
+user.name = "Alice"
+
+user.greet()
+User.__bases__
+type(User)
+```
+
+Results: `'Hello, Alice'`, `(object,)`, and `type`. This is broadly equivalent to defining a `class User` with `greet` in its body.
+
+| Argument | Meaning |
+| --- | --- |
+| Name (`"User"`) | Class's `__name__` |
+| Bases (`(object,)`) | Direct base classes; an empty tuple is also possible |
+| Namespace (`{"greet": greet}`) | Attributes/methods assigned directly to the new class |
+
+For introspection and serialization, it can be important to set the class's `__module__` and ensure the resulting class is reachable by name from that module.
+
+### 14.2 Use the metaclass explicitly when appropriate
+
+```python
+class TableMeta(type):
+    def __new__(mcls, name, bases, namespace):
+        namespace.setdefault("table_name", name.lower())
+        return super().__new__(mcls, name, bases, namespace)
+
+
+class BaseModel(metaclass=TableMeta):
+    pass
+
+
+Audit = TableMeta("Audit", (BaseModel,), {})
+Audit.table_name
+isinstance(Audit, TableMeta)
+```
+
+Results: `'audit'` and `True`. When classes have a custom metaclass, constructing with that metaclass explicitly makes the intention clear; do not assume direct calls to a particular class constructor reproduce every part of the `class` statement's header/decorator processing.
+
+### 14.3 `types.new_class()` and namespace initialization
+
+`types.new_class()` is a higher-level helper for dynamic class definitions, including metaclass selection, class keywords, and an optional callback to populate the namespace.
+
+```python
+import types
+
+
+def populate(namespace):
+    namespace["kind"] = "generated"
+    namespace["describe"] = lambda self: self.kind
+
+
+Generated = types.new_class("Generated", (), {}, populate)
+Generated().describe()
+Generated.__name__
+```
+
+Results: `'generated'` and `'Generated'`. Unlike the plain three-argument `type()` call, `types.new_class` is designed to follow more of the normal `class` statement's metaclass and class-keyword preparation process. It still does not apply arbitrary class decorators for you.
+
+### 14.4 Dynamic subclasses and factories
+
+```python
+class BaseQuery:
+    table_name = None
+
+    def describe(self):
+        return f"SELECT * FROM {self.table_name}"
+
+
+def make_query_type(table_name):
+    name = "".join(part.title() for part in table_name.split("_")) + "Query"
+    return type(name, (BaseQuery,), {"table_name": table_name})
+
+
+CustomerQuery = make_query_type("customers")
+CustomerQuery().describe()
+CustomerQuery.__mro__
+```
+
+Results: `'SELECT * FROM customers'` and an MRO beginning with `(CustomerQuery, BaseQuery, object)`.
+
+This example creates SQL **text only** and does not execute or sanitize a query. In actual database APIs, prefer parameterized SQL for values and safe identifier handling through library constructs.
+
+**When not to use dynamic classes:** prefer one ordinary class plus configuration values if behavior does not truly vary by type. Dynamic creation complicates stack traces, documentation, debugging, pickling, and static type checking. Use it when the **class itself** needs distinct identity, attributes, inheritance, or metaclass-level behavior.
+
+---
+## 15. Five ideas to remember
 
 1. **A class is an object.** `User` is an instance of its metaclass, generally `type`.
 2. **Inheritance and metaclass relationships are different.** `User` inherits from `BaseModel` but is an instance of `TableMeta`.
@@ -1001,19 +2161,33 @@ Don't confuse **special methods** (callable hooks like `__len__`) with **special
 4. **`vars()` reveals direct stored attributes; `dir()` advertises available names; `inspect` performs richer inspection.** These tools are complementary, not interchangeable.
 5. **Use a metaclass only when you need to change class creation.** For simpler subclass registration or validation, consider `__init_subclass__()` or a class decorator.
 
-### Mini practice exercises
+### Additional concepts at a glance
 
-```python
-# Predict each result before running it.
-type(User)
-User.__bases__
-User.__mro__
-vars(user)
-inspect.isfunction(User.greet)
-inspect.ismethod(user.greet)
-inspect.ismethod(User.get_category)
-inspect.signature(User)
-inspect.signature(user.greet)
-```
+| Concept | Main insight | Section |
+| --- | --- | --- |
+| Identity and references | Assignment usually binds names rather than copying objects | 1 |
+| Class creation | `__set_name__` and `__init_subclass__` run during class construction | 2 |
+| Class state | Shadowing a class attribute is different from mutating its shared value | 3 |
+| Cooperative inheritance | `super()` follows the current instance's MRO | 3 |
+| Attribute precedence | Data descriptors generally outrank instance dictionaries | 4 |
+| Binding | Instance methods are function descriptors bound to `self` | 4 |
+| Storage | `__slots__` defines slot descriptors and may remove `__dict__` | 4 |
+| Lifetime | Reachability and GC are different from deterministic resource cleanup | 10 |
+| ABCs | Nominal interfaces can enforce abstract member implementation | 11 |
+| Protocols | Structural compatibility can be checked without explicit inheritance | 12 |
+| Class extension | Decorators, subclass hooks, and metaclasses act at different stages | 13 |
+| Dynamic types | `type(...)` and `types.new_class(...)` construct class objects at runtime | 14 |
+
+
+### Python documentation references
+
+- [Data model — objects, attribute access, slots, class creation](https://docs.python.org/3/reference/datamodel.html)
+- [Descriptor HowTo Guide](https://docs.python.org/3/howto/descriptor.html)
+- [`inspect` — Inspect live objects](https://docs.python.org/3/library/inspect.html)
+- [`abc` — Abstract base classes](https://docs.python.org/3/library/abc.html)
+- [`typing` — `Protocol` and `runtime_checkable`](https://docs.python.org/3/library/typing.html)
+- [`types` — Dynamic type creation](https://docs.python.org/3/library/types.html)
+- [`gc` — Garbage collector interface](https://docs.python.org/3/library/gc.html)
+- [`weakref` — Weak references](https://docs.python.org/3/library/weakref.html)
 
 *End of notes.*
