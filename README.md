@@ -4,7 +4,7 @@
 
 ## Collections
 
-### [Notes Archives](./notes_archive/)
+### [Notes Archives](./notes_archives/)
 
 Technical studies, concepts, and references across programming, software design, and machine intelligence
 
