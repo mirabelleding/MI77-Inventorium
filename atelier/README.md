@@ -17,13 +17,13 @@ pip install -e .
 ```
 
 ### Usage
-`inspect_object()`<br>
-Inspect the structure, attributes, methods, and inheritance of Python classes and instances.
+`introspect()`<br>
+Inspect the structure, attributes, methods, and inheritance of Python classes, instances and bound methods.
 ```python
-from mi77_utils.essentials import inspect_object
+from mi77_utils.essentials import introspect
 
-inspect_object(SomeClass, display=True)
-inspect_object(some_instance, display=True)
+introspect(SomeClass, display=True)
+introspect(some_instance, display=True)
 ```
 
 `perf_profile()`<br>
