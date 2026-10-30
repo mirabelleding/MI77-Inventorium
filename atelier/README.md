@@ -25,8 +25,18 @@ from mi77_utils.essentials import inspect_object
 inspect_object(SomeClass, display=True)
 inspect_object(some_instance, display=True)
 ```
+
+`perf_profile()`<br>
+Measure the execution time, CPU time, and memory usage of a Python code block.
+```python
+from mi77_utils.essentials import perf_profile
+
+with perf_profile():
+  run_some_code()
+```
+
 `df_to_sql()`<br>
-Generate a SQL file containing batched INSERT statements from a pandas or Polars DataFrame.
+Generate a SQL file for INSERT statements from a pandas or Polars DataFrame.
 ```python
 from mi77_utils.sql_scripts import df_to_sql
 
