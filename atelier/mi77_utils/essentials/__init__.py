@@ -1,7 +1,7 @@
-from .inspection import inspect_object
-from .performance import perf_profile
+from .introspect import introspect
+from .perf import performance_measure
 
 __all__ = [
-    "inspect_object",
-    "perf_profile",
+    "introspect",
+    "performance_measure",
 ]

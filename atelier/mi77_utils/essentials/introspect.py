@@ -10,7 +10,7 @@ def _signature(obj: object) -> str | None:
         return None
 
 
-def inspect_object(
+def introspect(
     obj: object,
     display: bool = False,
 ) -> dict[str, object]:
@@ -77,6 +77,19 @@ def inspect_object(
                 if inspect.isroutine(value)
                 and not name.startswith("__")
             ],
+        }
+
+    if inspect.ismethod(obj):
+        bound = obj.__self__
+
+        inspection["binding"] = {
+            "type": "class" if inspect.isclass(bound) else "instance",
+            "owner": (
+                bound.__qualname__
+                if inspect.isclass(bound)
+                else type(bound).__qualname__
+            ),
+            "function": obj.__func__.__qualname__,
         }
 
     if display:

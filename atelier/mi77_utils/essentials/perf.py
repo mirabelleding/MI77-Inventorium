@@ -4,7 +4,7 @@ from contextlib import contextmanager
 
 
 @contextmanager
-def perf_profile(name=None):
+def performance_measure(name=None):
 
     tracemalloc.start()
 
