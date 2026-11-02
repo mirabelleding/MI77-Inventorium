@@ -120,21 +120,3 @@ ModellingResults
     ├── ecl_by_scenarios
     └── ecl_loss_rates
 ```
----
-**input dataset construction**
-```
-select_ecl_input(transaction_id)
-│
-├── get_hierarchy_ids(transaction_id)
-│       └── hierarchy_ids
-│
-├── get_lag_matrix_cte(hierarchy_ids)
-│       ├── wrto_policy_bucket
-│       ├── dlq_lag
-│       ├── wrto_lag
-│       └── rec_lag
-│
-└── get_hierarchy_ref_cte(hierarchy_ids, lag_matrix_cte)
-        ├── hierarchy_id
-        └── mth_hierarchy_id
-```
