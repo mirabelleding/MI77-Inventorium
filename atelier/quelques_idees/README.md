@@ -16,7 +16,7 @@ An object-oriented Python library for Expected Credit Loss (ECL) modelling, supp
 - Multiprocessing-based batch execution with consolidated DataFrame outputs.
 - Automated pytest benchmark pipeline for verifying calculation results across all modelling stages.
 
-[Notes](./ecl_modelling_benchmark.md)
+[Notes](./designs/ecl_modelling_benchmark.md)
 
 ## AlchemyReflection — Internal Extension
 
@@ -38,4 +38,4 @@ An object-oriented Python library built around a transaction-driven recalculatio
 - Centralized result aggregation and structured DataFrame outputs.
 - Automated testing pipeline for verifying recalculation outputs against production benchmarks.
 
-[Notes](./recalculation_engine.md)
+[Notes](./designs/recalculation_engine.md)
