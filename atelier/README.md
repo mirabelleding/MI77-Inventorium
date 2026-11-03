@@ -1,17 +1,17 @@
 # Atelier
-A collection of abstractions, experiments, and evolving designs.
+A collection of abstractions, experiments, and something more...
 
-## MI77-Utils
+## [MI77-Utils](./mi77_utils/)
 *Some reusable Python utilities by MI77-LAB.*
 
 ### Installation
 From GitHub:
 ```bash
-pip install git+https://github.com/mirabelleding/atelier.git
+pip install git+https://github.com/mirabelleding/MI77-Inventorium.git@main#subdirectory=atelier
 ```
 Local installation in editable mode:
 ```bash
-git clone https://github.com/mirabelleding/atelier.git
+git clone https://github.com/mirabelleding/MI77-Inventorium.git
 cd atelier
 pip install -e .
 ```
@@ -45,7 +45,7 @@ df_to_sql(df=some_df,
           file_name="output_file_name")
 ```
 
-## Quelques Idées
+## [Quelques Idées](./quelques_idees/)
 
 A collection of software creations and architectural designs.
 

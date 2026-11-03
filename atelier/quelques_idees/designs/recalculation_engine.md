@@ -19,17 +19,18 @@ RecalcQueues
                                      │              │
                                      │              ▼
                                      ├◀───── ExecutionInputs
-                                     ▼              │
-                                   CalcA ─┐         │
-                                   CalcB ─┼◀────────┘
-                                   CalcC ─┤
-                                    ...  ─┘
+                                     ▼           │    ├── table_1: DataFrame
+                                   CalcA ─┐      │    ├── table_2: DataFrame
+                                   CalcB ─┼◀─────┘    ├── table_3: DataFrame
+                                   CalcC ─┤           ├── table_r_1: DataFrame
+                                    ...  ─┘           └── ...
                                      │
                                      ▼
                                  RecalcResults
-                                     ├── table_a: DataFrame
-                                     ├── table_b: DataFrame
-                                     └── table_c: DataFrame
+                                     ├── table_r_1: DataFrame
+                                     ├── table_r_2: DataFrame
+                                     ├── table_r_3: DataFrame
+                                     └── ...
 ```
 
 `ExecutionPlan` Class Structure
