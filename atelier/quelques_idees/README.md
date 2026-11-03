@@ -8,15 +8,15 @@ While some implementations remain private, selected abstractions, structural des
 
 ## ECL-Modelling-Benchmark
 
-An object-oriented Python library for Expected Credit Loss (ECL) modelling, supporting parallel batch execution across multiple portfolios.
+An object-oriented Python library for Expected Credit Loss (ECL) modelling, supporting modular calculation pipelines and parallel batch execution across multiple portfolios.
 
 **Architecture & Implementation**
-- Modular calculation pipeline comprising RRM (Roll-Rate Model), SIR (Significant Increase in Risk), FLA (Forward-Looking Adjustments), and ECL stages.
-- Dedicated input loaders and structured modelling result objects.
-- Multiprocessing-based batch execution with consolidated DataFrame outputs.
-- Automated pytest benchmark pipeline for verifying calculation results across all modelling stages.
+- Modular calculation pipeline comprising RRM (Roll-Rate Model), SIR (Significant Increase in Credit Risk), FLA (Forward-Looking Adjustments), and ECL (Expected Credit Loss) stages.
+- Dedicated input loaders and structured, stage-specific modelling result objects
+- Multiprocessing-enabled batch execution with consolidated DataFrame outputs.
+- Automated pytest-based validation for verifying calculation results across all modelling stages.
 
-[Notes](./designs/ecl_modelling_benchmark.md)
+[Designs](./designs/ecl_modelling_benchmark.md)
 
 ## AlchemyReflection — Internal Extension
 
@@ -29,13 +29,13 @@ An extension of AlchemyReflection, adapting its object-oriented SQLAlchemy inter
 
 ## Recalculation-Engine
 
-An object-oriented Python library built around a transaction-driven recalculation framework, supporting modular calculation pipelines and scope-specific execution.
+An object-oriented Python library for transaction-driven recalculation, featuring modular calculation pipelines, dependency-aware execution planning, and scope-specific computation.
 
 **Architecture & Implementation**
-- Transaction objects encapsulating execution context, transaction types, and calculation scopes.
-- Pipeline compilation into execution plans based on transaction-specific requirements.
-- Modular calculation components with reusable computation interfaces.
-- Centralized result aggregation and structured DataFrame outputs.
-- Automated testing pipeline for verifying recalculation outputs against production benchmarks.
+- Transaction objects encapsulating execution context, transaction types, and input data.
+- Pipeline compilation into scoped execution plans based on transaction scope and calculation dependencies.
+- Reusable calculator classes with declarative input specifications, formulas, and output definitions.
+- Centralized result collection and consolidation of calculator outputs across calculation pipelines.
+- Automated testing and validation of recalculation outputs against production reference results.
 
-[Notes](./designs/recalculation_engine.md)
+[Designs](./designs/recalculation_engine.md)&emsp;|&emsp;[Experiments](./experiments/recalc_engine/)

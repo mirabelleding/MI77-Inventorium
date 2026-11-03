@@ -22,7 +22,6 @@ class PipeCompiler:
     ):
         self.transaction = transaction
         self.calc_pipe = calc_pipe
-        self.planned = {}
 
     def compile(self) -> ExecutionPlan:
         self.planned = {}

@@ -77,11 +77,14 @@ class BaseCalc(ABC):
         scope = pd.DataFrame(self.scope, columns=CalcCoordinate._fields)
 
         if self._input_level != self.scope[0].hierarchy_level:
-            scope = scope.merge(
-                load_hierarchy_def(),
-                left_on="entity_id",
-                right_on="hierarchy_group_id",
-            ).assign(entity_id=lambda df: df["keyid"])
+            scope = (
+                scope
+                .merge(
+                    load_hierarchy_def(),
+                    left_on="entity_id",
+                    right_on="hierarchy_group_id",
+                ).assign(entity_id=lambda df: df["keyid"])
+            )
 
         return (
             scope.rename(columns={"entity_id": self._input_level})

@@ -1,8 +1,5 @@
 from typing import ClassVar
 
-import pandas as pd
-from recalc_engine.sources.dims import load_hierarchy_def
-
 from .base import BaseCalc, MeasureSpec
 
 

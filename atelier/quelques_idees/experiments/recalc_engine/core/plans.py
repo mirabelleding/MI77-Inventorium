@@ -13,7 +13,7 @@ class CalcPlan:
     scope: tuple[CalcCoordinate, ...]
 
 
-@dataclass
+@dataclass(frozen=True)
 class ExecutionPlan:
     plan: tuple[CalcPlan, ...]
 

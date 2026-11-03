@@ -13,10 +13,10 @@ class Transaction:
     def __post_init__(self):
         self.division, self.type_, self.process_month = self._get_metadata()
 
-    def _get_metadata(self) -> tuple[str, str, date]:  #TODO: replace
+    def _get_metadata(self) -> tuple[str, str, date]:
         return tuple(
             demo_tx_table.set_index("uuid")
-            .loc[str(self.uuid), ["division", "type", "process_mth"]]
+            .loc[str(self.uuid), ["division", "type", "process_mth"]]   #TODO: replace
         )
 
     @cached_property
