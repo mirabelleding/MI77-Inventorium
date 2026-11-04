@@ -92,11 +92,12 @@ By default, `calculate()` retains the input variables; use `output_only=True` to
 
 | Input structure | Result structure |
 | --- | --- |
-| `dict` of scalars, NumPy `array`, or pandas/Polars `Series` | `dict` with values in their respective types|
+| `dict` of `Any` | `dict` with value types determined by the evaluated expressions|
 | pandas/Polars `DataFrame` | pandas/Polars`DataFrame` |
 | pandas `Series` indexed by variable names | `dict` |
 | Dataclass instance | `dict` |
 
+> *Dictionary values may be of any type, including NumPy arrays, pandas/Polars Series, or any Python object, provided the evaluated expressions support their operations.*
 
 ### Evaluation Behavior
 
