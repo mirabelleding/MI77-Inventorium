@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "MI77-Utils"
-version = "0.1.0"
+version = "0.2.0"
 description = "Reusable Python utilities by MI77-LAB."
 requires-python = ">=3.10"
 authors = [
@@ -12,6 +12,14 @@ authors = [
 ]
 
 dependencies = []
+
+[project.optional-dependencies]
+sqlalchemy = ["sqlalchemy>=2.0,<3.0"]
+pandas = ["pandas>=2.0,<4.0"]
+polars = ["polars>=1.0,<3.0"]
+pyodbc = ["pyodbc>=5.0,<6.0"]
+arrow = ["pyarrow>=15.0,<27.0"]
+msoffcrypto = ["msoffcrypto-tool>=6.0,<7.0"]
 
 [tool.setuptools.packages.find]
 include = ["mi77_utils*"]
