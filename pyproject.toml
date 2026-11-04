@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "MI77-Utils"
 version = "0.2.0"
 description = "Reusable Python utilities by MI77-LAB."
+readme = "atelier/mi77_utils/README.md"
 requires-python = ">=3.10"
 authors = [
     { name = "MI77-LAB" }
@@ -21,5 +22,9 @@ pyodbc = ["pyodbc>=5.0,<6.0"]
 arrow = ["pyarrow>=15.0,<27.0"]
 msoffcrypto = ["msoffcrypto-tool>=6.0,<7.0"]
 
+[tool.setuptools]
+package-dir = {"" = "atelier"}
+
 [tool.setuptools.packages.find]
+where = ["atelier"]
 include = ["mi77_utils*"]

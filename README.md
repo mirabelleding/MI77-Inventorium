@@ -1,16 +1,18 @@
 # MI77-Inventorium
 
-*An evolving collection of knowledge, ideas, and explorations in software architecture and engineering.*
+*An evolving collection of knowledge, ideas, and explorations in architecture and engineering.*
 
 ## Collections
 
 ### [Notes Archives](./notes_archives/)
 
-Technical studies, concepts, and references across programming, software design, and machine intelligence
+Technical studies, concepts, and references across programming, software design, and machine intelligence.
 
 ### [Atelier](./atelier/)
 
-Abstractions, experiments, and the art of software composition.
+Abstractions, experimentations, and the art of composition.
+
+**[MI77-Utils](./atelier/mi77_utils/)** — A collection of Python utilities for computation, introspection, and interoperability.
 
 <hr>
 
