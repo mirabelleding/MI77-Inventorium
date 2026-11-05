@@ -1,21 +1,6 @@
 # MI77-Utils
 
-A Python utility library of reusable tools and abstractions for development, computation, and data interoperability, by MI77-LAB.
-## Contents
-
-- [Overview](#overview)
-- [Installation](#installation)
-- [Essentials](#essentials)
-- [Computations](#computations)
-- [Interops](#interops)
-
-## Overview
-| Module | Utilities |
-| --- | --- |
-| `essentials` | `introspect`, `performance_measure` |
-| `computations` | `Calculator` |
-| `interops.sql` | `df_to_sql` |
-| `interops.excel` | `unlock_excel` |
+A Python utility library of reusable tools and abstractions for development, computations, and interoperability, by MI77-LAB.
 
 ## Installation
 
@@ -24,6 +9,12 @@ pip install git+https://github.com/mirabelleding/MI77-Inventorium.git
 ```
 
 *The core library has no third-party dependencies. Certain utilities may require additional packages.*
+
+## Modules
+
+- [Essentials](#essentials)
+- [Computations](#computations)
+- [Interops](#interops)
 
 ## Essentials
 
@@ -38,12 +29,12 @@ introspect(some_instance, display=True)
 ```
 ---
 
-`perf_profile()`<br>
+`performance_measure()`<br>
 Measure the execution time, CPU time, and memory usage of a Python code block.
 ```python
-from mi77_utils.essentials import perf_profile
+from mi77_utils.essentials import performance_measure
 
-with perf_profile("some optional name"):
+with performance_measure("some optional name"):
   run_some_code()
 ```
 
@@ -72,7 +63,8 @@ calc = Calculator(
     }
 )
 ```
-Each key defines an output variable, and its value is a Python expression represented as a string.Formulas can be supplied through keyword arguments or a mapping, but not both.
+Each key defines an output variable, and its value is a Python expression represented as a string.
+Formulas can be supplied through keyword arguments or a mapping, but not both.
 
 The optional `namespace` mapping exposes custom functions, modules, and constants to expressions.
 ```python
@@ -85,12 +77,12 @@ Calculator(
     creation="some_magic()",
 )
 ```
-By default, `calculate()` retains the input variables; use `output_only=True` to return only calculated outputs.
+By default, `calculate()` retains the input variables; use `output_only=True` to return only output variables.
 
 
 ### Supported Input Structures
 
-| Input structure | Result structure |
+| Input type | Output type |
 | --- | --- |
 | `dict` of `Any` | `dict` with value types determined by the evaluated expressions|
 | pandas/Polars `DataFrame` | pandas/Polars`DataFrame` |
@@ -167,27 +159,48 @@ for name, values in inputs.items():
 ```
 ## Interops
 
+#### SQL Scripts
 `df_to_sql()`<br>
 Generate a SQL file for `INSERT` statements from a pandas or Polars DataFrame.
 ```python
-from mi77_utils.sql_scripts import df_to_sql
+from mi77_utils.interops import df_to_sql
 
 df_to_sql(df=some_df,
           target_table="schemaname.tablename",
           file_name="output_file_name")
 ```
 ---
+#### MSOffice I/O
 
-`unlock_excel()`<br>
-Load a password-protected Excel file into an in-memory stream.
+`decrypt_msoffice()` & `encrypt_msoffice()`<br>
+Decrypt/Encrypt supported file types into an in-memory `BytesIO` stream; password can be passed as argument or entered through automatic prompt, with optional persistence to a specified location via `save_to`.
 
 ```python
 import polars as pl
 
-from mi77_utils.interops.excel import unlock_excel
+from mi77_utils.interops import decrypt_msoffice, encrypt_msoffice
 
-pl.read_excel(unlock_excel("some_locked_file.xlsx"))
+pl.read_excel(decrypt_msoffice("some_locked_file.xlsx"))
+
+encrypt_msoffice(
+    "some_file.xlsx",
+    password="...",
+    save_to="encrypted_file.xlsx"
+    )
 ```
+**Supported file formats**
+
+Encryption and decryption are implemented using [`msoffcrypto-tool`](https://github.com/nolze/msoffcrypto-tool); supported file formats and encryption methods subject to the underlying library.
+
+| Format | Decryption | Encryption |
+|---|---|---|
+| Excel | `.xlsx`, `.xls`* | `.xlsx` |
+| Word | `.docx`, `.doc` | `.docx` |
+| PowerPoint | `.pptx`, `.ppt`* | `.pptx` |
+
+*Legacy `.xls` decryption is experimental; `.ppt` support is partial and experimental. Encryption support is limited to OOXML formats and is experimental.*
+
+
 <hr>
 <p align="center">
   <img

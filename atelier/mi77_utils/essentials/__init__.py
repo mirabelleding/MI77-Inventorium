@@ -1,5 +1,5 @@
 from .introspect import introspect
-from .perf import performance_measure
+from .performance import performance_measure
 
 __all__ = [
     "introspect",

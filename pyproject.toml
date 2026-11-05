@@ -22,6 +22,10 @@ pyodbc = ["pyodbc>=5.0,<6.0"]
 arrow = ["pyarrow>=15.0,<27.0"]
 msoffcrypto = ["msoffcrypto-tool>=6.0,<7.0"]
 
+data = ["mi77-utils[pandas,polars,arrow]"]
+sql = ["mi77-utils[sqlalchemy,pyodbc]"]
+all = ["mi77-utils[data,sql,msoffcrypto]"]
+
 [tool.setuptools]
 package-dir = {"" = "atelier"}
 
