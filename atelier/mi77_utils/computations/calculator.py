@@ -2,12 +2,11 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, fields, is_dataclass
+from dataclasses import fields, is_dataclass
 from functools import reduce
 from typing import Any
 
 
-@dataclass(frozen=True, init=False)
 class Calculator:
     """
     Evaluate Python expressions over named variables, configured through
@@ -46,10 +45,6 @@ class Calculator:
     --------
     Formulas must be trusted because eval() can execute arbitrary code.
     """
-
-    formulas: dict[str, str]
-    namespace: dict[str, Any]
-
     def __init__(
         self,
         formulas: Mapping[str, str] | None = None,
@@ -62,19 +57,10 @@ class Calculator:
                 "Provide formulas as a mapping or keyword arguments."
             )
 
-        object.__setattr__(
-            self,
-            "formulas",
-            dict(
-                formulas
-                if formulas is not None
-                else expressions),
+        self.formulas = dict(
+            formulas if formulas is not None else expressions
         )
-        object.__setattr__(
-            self,
-            "namespace",
-            dict(namespace) if namespace is not None else {},
-        )
+        self.namespace = dict(namespace) if namespace is not None else {}
 
     def calculate(
         self,
