@@ -16,7 +16,19 @@ def decrypt_msoffice(
     password: str | None = None,
     save_to: str | Path | None = None,
 ) -> BytesIO:
+    """
+    Notes
+    -----
+    Password prompting uses Python's getpass(), which requires
+    a compatible interactive input environment.
 
+    In some WSL-hosted environments, particularly when accessing
+    Windows-mounted files from notebooks or non-interactive
+    sessions, the password prompt may not appear and execution
+    may remain blocked waiting for input.
+
+    Pass the password explicitly to avoid interactive prompting.
+    """
     with open(path, "rb") as source:
         file = OfficeFile(source)
 

@@ -188,6 +188,12 @@ encrypt_msoffice(
     save_to="encrypted_file.xlsx"
     )
 ```
+> In some WSL environments, particularly when accessing
+> Windows-mounted files from notebooks or non-interactive
+> sessions, the password prompt may not appear.
+>
+> To avoid this behavior, supply `password` explicitly.
+
 **Supported file formats**
 
 Encryption and decryption are implemented using [`msoffcrypto-tool`](https://github.com/nolze/msoffcrypto-tool); supported file formats and encryption methods subject to the underlying library.
