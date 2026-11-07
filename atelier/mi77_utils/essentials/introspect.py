@@ -1,6 +1,6 @@
 
 import inspect
-from pprint import pprint
+from pprint import pprint as _pprint
 
 
 def _signature(obj: object) -> str | None:
@@ -12,7 +12,7 @@ def _signature(obj: object) -> str | None:
 
 def introspect(
     obj: object,
-    display: bool = False,
+    pprint: bool = False,
 ) -> dict[str, object]:
 
     if inspect.isclass(obj):
@@ -92,7 +92,7 @@ def introspect(
             "function": obj.__func__.__qualname__,
         }
 
-    if display:
-        pprint(inspection, sort_dicts=False)
+    if pprint:
+        _pprint(inspection, sort_dicts=False)
 
     return inspection
