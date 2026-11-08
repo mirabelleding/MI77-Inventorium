@@ -1,5 +1,5 @@
-from .calculator import Calculator
+from .engine import ComputationEngine
 
 __all__ = [
-    "Calculator",
+    "ComputationEngine",
 ]

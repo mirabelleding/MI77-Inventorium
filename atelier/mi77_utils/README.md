@@ -111,7 +111,7 @@ import numpy as np
 import pandas as pd
 import polars as pl
 
-from mi77_utils.computations import Calculator
+from mi77_utils.computations import ComputationEngine
 
 
 @dataclass
@@ -147,15 +147,25 @@ inputs = {
     "dataclass": XYZ(**scalar),
 }
 
-calc = Calculator(
-    namespace={"sqrt": np.sqrt},
+
+def to_percentage(ratio):
+    return ratio * 100
+
+
+def is_within_range(percentage):
+    return percentage <= 100
+
+
+engine = ComputationEngine(
     squared_norm="x**2 + y**2",
-    norm="sqrt(squared_norm)",
-    normalized="norm / z",
+    norm=lambda squared_norm: squared_norm**0.5,
+    ratio=lambda norm, z: norm / z,
+    percentage=to_percentage,
+    within_range=is_within_range,
 )
 
 for name, values in inputs.items():
-    display(name, calc.calculate(values))
+    display(name, engine.compute(values))
 ```
 ## Interops
 
