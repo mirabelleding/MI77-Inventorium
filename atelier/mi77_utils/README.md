@@ -40,23 +40,23 @@ with performance_measure("some optional name"):
 
 ## Computations
 
-## `Calculator`<br>
+## `ComputationEngine`<br>
 Evaluate named Python expressions against dictionaries, dataclasses, Pandas or Polars DataFrames, and Pandas Series indexed by variable names, with support for sequential formulas and custom namespaces.
 
 ### Defining Formulas
 
-`Calculator` supports two equivalent constructor styles.
+`ComputationEngine` supports two equivalent constructor styles.
 
 **Keyword Expressions**
 ```python
-calc = Calculator(
+calc = ComputationEngine(
     squared_norm="x**2 + y**2",
     norm="squared_norm**0.5",
 )
 ```
 **Formula Mapping**
 ```python
-calc = Calculator(
+calc = ComputationEngine(
     formulas={
         "squared_norm": "x**2 + y**2",
         "norm": "squared_norm**0.5",
