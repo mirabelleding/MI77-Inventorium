@@ -408,15 +408,28 @@ Useful when one expression expands to multiple columns.
 
 ## Expression composition
 
+An expression is a description of a calculation (`pl.Expr`), not the calculated column itself. Assigning it to a Python variable makes the **calculation reusable**; it does not immediately evaluate the DataFrame or create a materialized column.
+
 ```python
-gross = pl.col("price") * pl.col("quantity")
-net = gross - pl.col("discount")
+distance = pl.col("speed") * pl.col("duration")
+remaining = pl.col("target_distance") - distance
 
 df.with_columns(
-    gross=gross,
-    net=net,
+    distance=distance,
+    remaining=remaining,
 )
 ```
+
+For `speed=[3, 5]`, `duration=[4, 2]`, and `target_distance=[20, 15]`:
+
+| distance | remaining |
+|---:|---:|
+| 12 | 8 |
+| 10 | 5 |
+
+Both expressions can run within **one** `with_columns()` call because `remaining` reuses the `distance` expression itself. By contrast, `pl.col("distance")` looks for a column called `distance` in that call's **input** DataFrame.
+
+In a lazy query, Polars may also identify equivalent subexpressions and optimize repeated computations. Reusing a Python `Expr` object does not itself guarantee that an intermediate result is materialized or calculated only once.
 
 Reusable expression functions:
 
@@ -495,6 +508,43 @@ df.select_seq(
 ```
 
 Useful when individual expressions are very cheap and parallelization overhead is unnecessary.
+
+`select()` may execute independent expressions concurrently; `select_seq()` avoids the overhead of doing so. **Sequential evaluation does not imply that one expression can reference an alias created by its sibling.** Each expression still uses the input schema.
+
+```python
+df = pl.DataFrame({"a": [1, 2], "b": [5, 8]})
+
+df.select_seq(
+    next_a=pl.col("a") + 1,
+    next_b=pl.col("b") + 1,
+)
+```
+
+| next_a | next_b |
+|---:|---:|
+| 2 | 6 |
+| 3 | 9 |
+
+For larger or more expensive independent expressions, normal `select()` is usually the better default. Measure with `timeit` or an appropriate benchmark instead of assuming sequential execution is faster.
+
+`timeit` is a module in Python's **standard library**, while `time.perf_counter()` is a high-resolution timer often used for measuring one code block. The former repeats a statement to reduce noise:
+
+```python
+from timeit import repeat
+
+measurements = repeat(
+    lambda: df.select_seq(
+        a=pl.col("x") + 1,
+        b=pl.col("y") + 1,
+    ),
+    number=100,
+    repeat=5,
+)
+
+best_seconds_per_call = min(measurements) / 100
+```
+
+Compare this with an otherwise identical `select()` benchmark on representative data. For a **lazy** query, include `.collect()` in what you time; otherwise you may only measure the cost of constructing the query plan.
 
 ---
 
@@ -589,23 +639,40 @@ df = df.with_columns(
 
 ## `with_columns()`
 
-Add or replace columns.
+Add or replace columns **without discarding the others**. It accepts expressions, so its role is broader than merely assigning new columns: the same method also casts types, cleans values, derives features, applies conditional logic, and computes grouped/window transformations.
 
 ```python
 df = df.with_columns(
-    revenue=pl.col("price") * pl.col("quantity")
+    kinetic_energy=0.5 * pl.col("mass") * pl.col("velocity") ** 2
 )
 ```
 
-Multiple columns:
+Several independent operations in one call:
 
 ```python
 df = df.with_columns(
-    revenue=pl.col("price") * pl.col("quantity"),
-    margin=pl.col("revenue") - pl.col("cost"),
-    year=pl.col("date").dt.year(),
+    temperature=pl.col("temperature").cast(pl.Float64, strict=False),
+    station=pl.col("station").str.strip_chars().str.to_uppercase(),
+    year=pl.col("observed_at").dt.year(),
+    above_freezing=pl.col("temperature").cast(pl.Float64, strict=False) > 0,
 )
 ```
+
+Notice that `temperature` is **replaced** because the expression's output name matches an existing column; `year` and `above_freezing` are **added**. The new DataFrame is returned; the original is not modified in place. Unchanged columns need not have all their underlying data copied.
+
+Other useful patterns:
+
+```python
+df.with_columns(
+    sensor_status=pl.when(pl.col("reading").is_null())
+                    .then(pl.lit("missing"))
+                    .otherwise(pl.lit("recorded")),
+    reading=pl.col("reading").fill_null(0),
+    local_hour=pl.col("timestamp").dt.hour(),
+)
+```
+
+Each expression above reads the original columns. In particular, `sensor_status` checks the **original** nulls; it does not see the filled `reading` from the same call.
 
 ### Important expression dependency detail
 
@@ -636,6 +703,8 @@ df = df.with_columns(
 )
 ```
 
+The second form repeats the **definition** of `revenue` in the expression graph; it does not fetch a newly stored `revenue` column. This distinction matters in formula pipelines with intermediate dependencies.
+
 ## `with_columns_seq()`
 
 Sequential counterpart to `with_columns()` for cheap expressions.
@@ -646,6 +715,8 @@ df.with_columns_seq(
     pl.col("b").cast(pl.Int64),
 )
 ```
+
+As with `select_seq()`, sequential execution is a performance choice for independent, cheap expressions. It is **not** a mechanism for referring to a column created earlier in the same call. Use chained `with_columns()` calls for actual column dependencies.
 
 ## `with_row_index()`
 
@@ -665,6 +736,23 @@ df.with_row_index(
 ```
 
 Polars does not use a pandas-style implicit row index as a central abstraction.
+
+In pandas, every DataFrame has an `Index`, which can carry labels (`0, 1, 2`, dates, identifiers) separately from the data columns. pandas can align Series by these labels, not merely by position.
+
+In Polars, rows have positions, but no independent, implicit index used for label alignment. `with_row_index()` adds an **ordinary column** (normally named `index`) containing consecutive integers.
+
+```python
+df = pl.DataFrame({"species": ["oak", "pine", "elm"]})
+df.with_row_index(name="row_id", offset=100)
+```
+
+| row_id | species |
+|---:|---|
+| 100 | oak |
+| 101 | pine |
+| 102 | elm |
+
+If you filter that result, surviving `row_id` values retain their original numbers; they are not automatically renumbered. To assign fresh positions after filtering, call `with_row_index()` on the filtered frame instead. For cross-frame alignment, use explicit keys and `join()`.
 
 ---
 
@@ -695,6 +783,33 @@ df.filter(
     pl.col("status") == "active",
 )
 ```
+
+These two calls are **equivalent**: the first supplies one combined boolean expression, whereas the second supplies two separate predicate arguments that Polars combines with AND.
+
+```python
+df = pl.DataFrame({
+    "temperature": [15, 30, 38],
+    "humidity": [20, 45, 80],
+})
+
+df.filter(
+    pl.col("temperature") > 25,
+    pl.col("humidity") < 60,
+)
+```
+
+Result: only `temperature=30, humidity=45`.
+
+For **OR**, join the conditions explicitly using `|`:
+
+```python
+df.filter(
+    (pl.col("temperature") < 20)
+    | (pl.col("humidity") > 70)
+)
+```
+
+For simple equality conditions, keyword constraints are convenient: `df.filter(status="active")`. Keyword constraints are ANDed with other predicates.
 
 ## Comparison operators
 
@@ -775,6 +890,22 @@ df.filter(
 )
 ```
 
+These predicates distinguish concepts that are easily confused:
+
+| Value | `is_null()` | `is_nan()` | `is_finite()` | `is_infinite()` |
+|---|---|---|---|---|
+| `3.5` | false | false | true | false |
+| `float("nan")` | false | true | false | false |
+| `float("inf")` | false | false | false | true |
+| `float("-inf")` | false | false | false | true |
+| `None` → null | true | null | null | null |
+
+Here, `null` in a predicate result means **unknown**, not `false`. `filter()` retains only rows where the predicate evaluates to `true`.
+
+`NaN` is a floating-point number encoding an undefined numerical result (for example `0.0 / 0.0` in NumPy), not the same as Polars' missing-value marker `null`. In NumPy, `np.nan` is often used *as* a missing-value sentinel because a traditional floating-point array has no separate null mask. In Polars, null and NaN are distinct.
+
+**Finite** means a real numeric value other than positive/negative infinity or NaN. `is_not_nan()` still accepts `±inf`; use `is_finite()` when both NaN and infinity should be excluded.
+
 ## `remove()`
 
 The inverse concept of `filter`: drop rows matching predicates.
@@ -804,6 +935,8 @@ df.with_columns(
     )
 )
 ```
+
+The first matching condition determines the value returned for each row. However, **Polars does not short-circuit the evaluation of branch expressions**: the expressions in all branches must be valid independently. For example, `when(pl.col("x") > 0).then(pl.col("missing_column"))` still fails if that column does not exist, even if the condition is false for every row.
 
 Multiple branches:
 
@@ -851,6 +984,10 @@ SQL analogy:
 COALESCE(preferred_name, legal_name, username)
 ```
 
+`coalesce()` chooses the first **non-null** value on each row—not the first truthy value. Thus `0`, `False`, and `""` are all valid values and are **not** skipped; only null is.
+
+For `preferred_name=[null, "", "Ada"]` and `legal_name=["Alice", "Bob", "Ada L."]`, the result is `["Alice", "", "Ada"]`.
+
 ---
 
 # 10. Sorting and row selection
@@ -860,6 +997,8 @@ COALESCE(preferred_name, legal_name, username)
 ```python
 df.sort("amount")
 ```
+
+`DataFrame.sort()` reorders **entire rows** according to one or more keys, keeping column values from each record together.
 
 Descending:
 
@@ -904,6 +1043,42 @@ pl.col("customer").sort_by(
     descending=True,
 )
 ```
+
+Compare all three forms on a small observational dataset:
+
+```python
+df = pl.DataFrame({
+    "specimen": ["A", "B", "C"],
+    "mass": [30, 10, 20],
+})
+
+df.sort("mass")
+```
+
+| specimen | mass |
+|---|---:|
+| B | 10 |
+| C | 20 |
+| A | 30 |
+
+```python
+df.select(
+    sorted_mass=pl.col("mass").sort(),
+    specimen_by_mass=pl.col("specimen").sort_by("mass"),
+)
+```
+
+| sorted_mass | specimen_by_mass |
+|---:|---|
+| 10 | B |
+| 20 | C |
+| 30 | A |
+
+- `df.sort("mass")`: sorts the **DataFrame** by mass.
+- `pl.col("mass").sort()`: sorts the **values of that expression**.
+- `pl.col("specimen").sort_by("mass")`: returns specimen values ordered according to a **different expression**, mass.
+
+Be careful when mixing independently sorted expressions with untouched columns in `select()`: it does **not** mean the whole row was reordered. Use `df.sort()` to preserve row associations.
 
 Useful inside aggregation:
 
@@ -1159,6 +1334,26 @@ Polars' immutable-style expression workflow means explicit copying is needed muc
 
 ## Common scalar data types
 
+An integer type ending in `8`, `16`, `32`, or `64` uses that many **bits**. With `n` bits, there are `2ⁿ` possible bit patterns.
+
+| Type | Value range | Interpretation |
+|---|---|---|
+| `Int8` | −128 to 127 | Signed, 8 bits |
+| `UInt8` | 0 to 255 | Unsigned, 8 bits |
+| `Int16` | −32,768 to 32,767 | Signed, 16 bits |
+| `UInt16` | 0 to 65,535 | Unsigned, 16 bits |
+| `Int32` | −2³¹ to 2³¹−1 | Signed, 32 bits |
+| `UInt32` | 0 to 2³²−1 | Unsigned, 32 bits |
+| `Int64` | −2⁶³ to 2⁶³−1 | Signed, 64 bits |
+| `UInt64` | 0 to 2⁶⁴−1 | Unsigned, 64 bits |
+
+In general:
+
+- **Signed `IntN`**: −2^(N−1) through 2^(N−1)−1; can store negative and positive integers.
+- **Unsigned `UIntN`**: 0 through 2^N−1; dedicates all bit patterns to nonnegative values.
+
+For instance, an 8-bit sensor counter that never drops below zero can use `UInt8` for 0–255 readings; `Int8` can represent −128–127. These are fixed-width types, unlike Python's arbitrary-precision `int`. Casting an out-of-range value may raise (or produce null with `strict=False`).
+
 Signed integers:
 
 ```python
@@ -1193,6 +1388,13 @@ pl.String
 pl.Binary
 pl.Decimal
 ```
+
+“Primitive” here means a **single scalar value per cell**, in contrast with nested values such as `List`, `Array`, and `Struct`. This is a useful conceptual distinction rather than an exact claim about physical storage: `String` and `Binary` are variable-width, and `Decimal` has fixed-precision numeric semantics.
+
+- `Boolean`: `True` / `False`, plus possible null.
+- `String`: Unicode text.
+- `Binary`: arbitrary bytes (such as encoded measurement packets).
+- `Decimal(precision=10, scale=3)`: exact decimal representation with ten total digits, three after the decimal point—useful when binary floating-point rounding is unacceptable.
 
 Temporal:
 
@@ -1246,6 +1448,18 @@ df.with_columns(
 
 Values that cannot be converted can become null instead of raising.
 
+For example:
+
+```python
+df = pl.DataFrame({"reading": ["12.5", "bad", "8.0"]})
+
+df.with_columns(
+    reading=pl.col("reading").cast(pl.Float64, strict=False)
+)
+```
+
+The output is `reading=[12.5, null, 8.0]` (`Float64`). With the default `strict=True`, `"bad"` causes an exception instead. For scientific measurement inputs, non-strict parsing can be paired with a separate rejection flag to preserve evidence of malformed entries.
+
 ## Cast multiple columns
 
 ```python
@@ -1285,14 +1499,27 @@ Useful when evolving or aligning a frame to a target schema under controlled rul
 
 This is valuable in production pipelines where schemas can evolve and you need explicit behavior for missing or additional fields.
 
+Unlike a plain `cast()`, this operation can apply schema-evolution policies to **missing and extra columns**, as well as dtypes. For example, an older observation batch might lack a newly introduced `sensor_quality` column, while a newer batch contains it. Explicit schema matching lets a pipeline decide whether to insert that field, reject the batch, or handle extra fields—instead of relying on implicit concatenation behavior.
+
 ---
 
 # 13. Missing values and NaN
 
 Polars distinguishes **null** from **NaN**.
 
-- `null`: missing data.
-- `NaN`: IEEE floating-point "not a number".
+- `null`: an absent value, represented separately from the underlying data values. Any supported dtype can contain nulls.
+- `NaN`: an IEEE floating-point value meaning “not a number”; not the same as a missing entry.
+- `+inf` / `-inf`: positive/negative infinity in floating-point arithmetic; neither null nor NaN.
+
+For scientific observations:
+
+| Observation | Meaning | Polars representation |
+|---|---|---|
+| Sensor failed to record | Measurement is absent | `null` |
+| Numeric operation yielded an undefined result | A floating-point value exists, but is NaN | `float("nan")` |
+| Numeric operation overflowed to positive infinity | Non-finite floating point | `float("inf")` |
+
+`np.nan` is commonly treated as a “missing value” in NumPy/pandas numeric arrays, but Polars keeps null and NaN separate. Consequently, `fill_null()` does not replace NaN, and `fill_nan()` does not replace null.
 
 ## Null checks
 
@@ -1348,6 +1575,42 @@ pl.col("x").fill_null(
 
 Statistical strategies can also be used where compatible.
 
+**Forward fill** takes the most recent **preceding** non-null value. **Backward fill** uses the next **following** non-null value.
+
+```python
+df = pl.DataFrame({"signal": [10, None, None, 40, None]})
+
+df.select(
+    original="signal",
+    forward=pl.col("signal").fill_null(strategy="forward"),
+    backward=pl.col("signal").fill_null(strategy="backward"),
+)
+```
+
+| original | forward | backward |
+|---:|---:|---:|
+| 10 | 10 | 10 |
+| null | 10 | 40 |
+| null | 10 | 40 |
+| 40 | 40 | 40 |
+| null | 40 | null |
+
+Forward fill cannot fill **leading** nulls without an earlier valid reading; backward fill cannot fill **trailing** nulls without a later valid reading. Both use the **current row order**, not an implicit time axis. Sort by timestamp first if chronological order matters.
+
+```python
+df.sort(["sensor_id", "timestamp"]).with_columns(
+    signal_filled=(
+        pl.col("signal")
+        .fill_null(strategy="forward")
+        .over("sensor_id")
+    )
+)
+```
+
+The `over("sensor_id")` limits the fill to each sensor; it avoids carrying a reading from one sensor into another. Use `limit=...` with forward/backward strategies when only a limited number of consecutive nulls may be imputed.
+
+This replacement of missing observations is called **imputation**. Choosing forward fill assumes the last observation remains applicable; backward fill makes the analogous assumption about the next observation. These assumptions are often inappropriate for rapidly changing signals.
+
 ## `fill_nan()`
 
 ```python
@@ -1398,7 +1661,49 @@ Expression:
 pl.col("value").interpolate()
 ```
 
-Useful for ordered numeric/time-series data.
+Unlike forward/backward fill, **linear interpolation** estimates intermediate values from the readings **on both sides** of a gap.
+
+```python
+df = pl.DataFrame({"temperature": [10.0, None, None, 40.0]})
+df.with_columns(
+    estimated=pl.col("temperature").interpolate()
+)
+```
+
+| temperature | estimated |
+|---:|---:|
+| 10.0 | 10.0 |
+| null | 20.0 |
+| null | 30.0 |
+| 40.0 | 40.0 |
+
+Here the gap spans three equal row intervals, so each interval adds `(40−10)/3 = 10`.
+
+By default, interpolation assumes **equal spacing between rows**, even when measurements happened at irregular times. If a numeric/date x-coordinate matters, use `interpolate_by()`:
+
+```python
+df = pl.DataFrame({
+    "day": [1, 2, 5],
+    "temperature": [10.0, None, 40.0],
+})
+
+df.select(
+    equal_steps=pl.col("temperature").interpolate(),
+    actual_days=pl.col("temperature").interpolate_by("day"),
+)
+```
+
+| equal_steps | actual_days |
+|---:|---:|
+| 10.0 | 10.0 |
+| 25.0 | 17.5 |
+| 40.0 | 40.0 |
+
+The actual-day estimate is `10 + (40−10) × (2−1)/(5−1) = 17.5`.
+
+`interpolate(method="nearest")` instead takes the nearest known value by position. Standard interpolation normally leaves leading/trailing nulls without two surrounding values unchanged. It interpolates **nulls**, not NaNs; clean NaNs separately if needed.
+
+Interpolation is appropriate when continuity between measurements is a defensible assumption—for example, a moderately smooth sensor signal. It is not equivalent to recovering the original missing measurement.
 
 ## Missing-value summary
 
@@ -1509,11 +1814,40 @@ pl.col("amount").clip(
 )
 ```
 
+Clipping **caps** every value to an interval without removing rows:
+
+```python
+df = pl.DataFrame({"probability": [-0.2, 0.3, 1.4, None]})
+df.select(
+    original="probability",
+    clipped=pl.col("probability").clip(0, 1),
+)
+```
+
+| original | clipped |
+|---:|---:|
+| −0.2 | 0.0 |
+| 0.3 | 0.3 |
+| 1.4 | 1.0 |
+| null | null |
+
+Mathematically, `clip(x, a, b) = min(max(x, a), b)`. A lower-only bound computes `max(x, a)`. It is useful for limiting outliers or bounding a model prediction, but it **does not validate** whether an out-of-range input was legitimate.
+
 ## `sign()`
 
 ```python
 pl.col("x").sign()
 ```
+
+Returns the sign of each number: negative → `-1`, zero → `0`, positive → `+1`; null remains null.
+
+```python
+pl.DataFrame({"change": [-12, 0, 7]}).select(
+    direction=pl.col("change").sign()
+)
+```
+
+Result: `direction = [-1, 0, 1]`. This identifies direction without retaining magnitude.
 
 ## `dot()`
 
@@ -1522,6 +1856,33 @@ Dot product:
 ```python
 pl.col("a").dot(pl.col("b"))
 ```
+
+The dot product of two equally sized numeric vectors is **elementwise multiplication followed by a sum**:
+
+\[
+\mathbf{a}\cdot\mathbf{b}=\sum_{i=1}^{n}a_i b_i.
+\]
+
+```python
+df = pl.DataFrame({
+    "a": [1, 3, 5],
+    "b": [2, 4, 6],
+})
+
+df.select(
+    dot=pl.col("a").dot(pl.col("b")),
+    equivalent=(pl.col("a") * pl.col("b")).sum(),
+)
+```
+
+Both outputs are `44`, because `1×2 + 3×4 + 5×6 = 44`.
+
+| Operation | Result |
+|---|---|
+| `pl.col("a") * pl.col("b")` | `[2, 12, 30]` (elementwise) |
+| `pl.col("a").dot(pl.col("b"))` | `44` (one scalar) |
+
+This is **not** a Cartesian product: a Cartesian product would pair **every** element of `a` with **every** element of `b` (`3×3=9` pairs). The dot product pairs corresponding positions (`3` pairs) and sums their products. For per-row dot products of fixed-size array-valued columns, see `arr.dot()` instead.
 
 ## Trigonometric functions
 
@@ -1575,11 +1936,15 @@ pl.col("amount").max()
 pl.col("amount").std()
 ```
 
+Standard deviation measures dispersion in the original units of the data. By default, Polars uses the sample correction (`ddof=1`). For a population standard deviation, use `std(ddof=0)`.
+
 ## `var()`
 
 ```python
 pl.col("amount").var()
 ```
+
+Variance is the squared standard deviation (and therefore has **squared units**). `var(ddof=0)` calculates population variance; the default sample variance uses `ddof=1`.
 
 ## `quantile()`
 
@@ -1587,12 +1952,36 @@ pl.col("amount").var()
 pl.col("amount").quantile(0.95)
 ```
 
+The 0.95 quantile is the estimated value below which approximately 95% of observations fall. The answer can depend on the interpolation rule (`interpolation="nearest"` by default). Quantiles describe a **distribution**; `interpolate()` estimates **missing values between observations**—two distinct operations.
+
 ## `product()`
 
 ```python
 pl.col("factor").product()
 ```
 
+`product()` multiplies **all values in one expression**, reducing them to one scalar:
+
+```python
+df = pl.DataFrame({"factor": [2, 3, 4]})
+df.select(
+    product=pl.col("factor").product(),
+    sum=pl.col("factor").sum(),
+)
+
+df.select(
+    cumulative=pl.col("factor").cum_prod()
+)
+```
+
+| Operation | Result |
+|---|---|
+| `product()` | `2 × 3 × 4 = 24` |
+| `sum()` | `2 + 3 + 4 = 9` |
+| `cum_prod()` | `[2, 6, 24]` |
+| `dot(other)` | `sum(factorᵢ × otherᵢ)`—requires another vector |
+
+`product()` and `dot()` both multiply, but perform fundamentally different reductions. Nulls are ignored by `product()`, and its multiplicative identity for no non-null values is `1`.
 ## `count()`
 
 Count non-null values:
@@ -1624,6 +2013,24 @@ df.select(
 pl.col("customer_id").n_unique()
 ```
 
+**Cardinality** in set theory means the number of elements in a set, written `|S|`. The cardinality of a column's **distinct values** is therefore its number of unique values:
+
+```python
+values = ["oak", "pine", "oak", "birch", "pine"]
+
+len(set(values))
+
+df = pl.DataFrame({"species": values})
+df.select(
+    rows=pl.len(),
+    distinct_species=pl.col("species").n_unique(),
+)
+```
+
+Result: `rows=5`, `distinct_species=3`. In Polars, null is counted as one distinct category if it occurs.
+
+This is the same mathematical concept as `len(set(values))` for hashable Python values. In database language, *cardinality* can also describe row counts or relationship multiplicities depending on context; “distinct cardinality” specifically denotes unique-value count.
+
 ## `approx_n_unique()`
 
 Approximate cardinality:
@@ -1633,6 +2040,17 @@ pl.col("customer_id").approx_n_unique()
 ```
 
 Useful for very large datasets when exact cardinality is unnecessary.
+
+Uses a probabilistic sketch (HyperLogLog++) to estimate the number of distinct values using relatively little memory. For millions of observational identifiers it may be substantially cheaper than exact set counting, but the answer is an **estimate**, not necessarily identical to `n_unique()`.
+
+```python
+df.select(
+    exact=pl.col("specimen_id").n_unique(),
+    estimated=pl.col("specimen_id").approx_n_unique(),
+)
+```
+
+Use exact `n_unique()` for validation or integrity checks; approximation is more appropriate for exploratory cardinality estimates.
 
 ## `unique()`
 
@@ -1691,6 +2109,10 @@ df.select(
 )
 ```
 
+Pearson correlation measures the strength of a **linear association** on a scale from `-1` (perfect negative linear relation) to `+1` (perfect positive linear relation). A value near `0` indicates little linear association, not necessarily statistical independence.
+
+For `x=[1, 2, 3]` and `y=[2, 4, 6]`, `pl.corr("x", "y")` is `1.0`. Doubling one variable changes the slope but not the correlation.
+
 ## Covariance
 
 ```python
@@ -1699,9 +2121,21 @@ df.select(
 )
 ```
 
+Covariance measures how two variables vary **together**, retaining the product of their units. Positive covariance indicates they generally move in the same direction; negative covariance indicates opposite movement. Correlation normalizes covariance by both standard deviations:
+
+\[
+\operatorname{corr}(X,Y)=
+\frac{\operatorname{cov}(X,Y)}
+{\sigma_X\sigma_Y}.
+\]
+
+Covariance is **not** a “difference of variances” or a “variance of differences.” It is a separate measure of joint variation.
+
 ---
 
 # 16. GroupBy
+
+`group_by()` divides rows into partitions defined by one or more keys. An aggregation then produces **one row per group**; a window expression with `over()` usually preserves the original rows instead.
 
 ## Basic `group_by()`
 
@@ -1710,6 +2144,28 @@ df.group_by("region").agg(
     pl.col("sales").sum()
 )
 ```
+
+Example with ecological observations:
+
+```python
+df = pl.DataFrame({
+    "habitat": ["forest", "lake", "forest", "lake"],
+    "species": ["oak", "trout", "pine", "frog"],
+    "count": [8, 12, 5, 3],
+})
+
+df.group_by("habitat").agg(
+    total=pl.col("count").sum(),
+    species=pl.col("species"),
+)
+```
+
+| habitat | total | species |
+|---|---:|---|
+| forest | 13 | ["oak", "pine"] |
+| lake | 15 | ["trout", "frog"] |
+
+Without `maintain_order=True`, the order of group rows is not guaranteed; the order within each group's collected list follows the input order.
 
 Multiple keys:
 
@@ -1759,6 +2215,8 @@ df.group_by("region").agg(
 ```
 
 Without reducing the expression, each group's values are collected into a list.
+
+This differs from `pl.col("count").sum()` (one scalar per group). The expression `pl.col("species")` produces a **List** column: each output cell contains all species names in that habitat.
 
 ## Multiple list aggregations
 
@@ -1835,6 +2293,33 @@ df.with_columns(
     )
 )
 ```
+
+The most important distinction is **output shape**:
+
+```python
+df = pl.DataFrame({
+    "lab": ["A", "A", "B"],
+    "measurement": [10.0, 20.0, 90.0],
+})
+
+df.group_by("lab").agg(
+    mean=pl.col("measurement").mean()
+)
+
+df.with_columns(
+    lab_mean=pl.col("measurement").mean().over("lab")
+)
+```
+
+`group_by().agg()` produces **2 rows** (`A → 15`, `B → 90`). `with_columns(...over("lab"))` produces **3 rows**:
+
+| lab | measurement | lab_mean |
+|---|---:|---:|
+| A | 10.0 | 15.0 |
+| A | 20.0 | 15.0 |
+| B | 90.0 | 90.0 |
+
+This is similar to SQL's `OVER (PARTITION BY ...)` or pandas' grouped `transform`. Use a window when each original observation must remain available alongside the statistic of its group.
 
 ## Pandas `transform` equivalent
 
@@ -1928,6 +2413,8 @@ pl.col("value").mean().over(
 
 # 18. Cumulative, shift, diff, and ranking operations
 
+These methods are **order-sensitive**. Polars does not invent a chronological index, so sort explicitly before applying them to time-series data.
+
 ## `shift()`
 
 Lag:
@@ -1947,6 +2434,16 @@ By group:
 ```python
 pl.col("sales").shift(1).over("customer_id")
 ```
+
+Given `x=[10, 20, 40]`:
+
+| x | `shift(1)` (previous) | `shift(-1)` (next) | `diff()` | `pct_change()` |
+|---:|---:|---:|---:|---:|
+| 10 | null | 20 | null | null |
+| 20 | 10 | 40 | 10 | 1.0 |
+| 40 | 20 | null | 20 | 1.0 |
+
+`shift()` moves values by positions and fills the exposed boundary with nulls. `diff()` subtracts the previous value; `pct_change()` computes `current / previous - 1` (so `1.0` means 100% growth, not 1%).
 
 ## `diff()`
 
@@ -1975,6 +2472,18 @@ pl.col("x").cum_min()
 pl.col("x").cum_max()
 pl.col("x").cum_count()
 ```
+
+For `x=[2, 3, 4]`:
+
+| Method | Result |
+|---|---|
+| `cum_sum()` | `[2, 5, 9]` |
+| `cum_prod()` | `[2, 6, 24]` |
+| `cum_min()` | `[2, 2, 2]` |
+| `cum_max()` | `[2, 3, 4]` |
+| `cum_count()` | `[1, 2, 3]` |
+
+Unlike a single aggregation, a cumulative operation emits an answer at **each position**. `cum_count()` counts non-null observations so far.
 
 Reverse cumulative operations where supported:
 
@@ -2007,6 +2516,16 @@ pl.col("score").rank(
 )
 ```
 
+Methods differ in how tied values are treated. With `score=[90, 90, 70]` in **descending** order:
+
+| score | `average` | `min` | `max` | `dense` | `ordinal` |
+|---:|---:|---:|---:|---:|---:|
+| 90 | 1.5 | 1 | 2 | 1 | 1 |
+| 90 | 1.5 | 1 | 2 | 1 | 2 |
+| 70 | 3.0 | 3 | 3 | 2 | 3 |
+
+`dense` assigns equal ranks to ties **without gaps**, whereas `min` and `max` leave gaps. `ordinal` follows occurrence order, giving each value a distinct rank. `random` can break ties randomly (with a seed for reproducibility).
+
 ## `arg_sort()`
 
 Return row indices that would sort a column:
@@ -2014,6 +2533,8 @@ Return row indices that would sort a column:
 ```python
 pl.col("score").arg_sort()
 ```
+
+Returns **positions**, not sorted values. For `score=[30, 10, 20]`, `arg_sort()` yields `[1, 2, 0]`, whereas `sort()` yields `[10, 20, 30]`. This is analogous to NumPy's `argsort`.
 
 ## `arg_unique()`
 
@@ -2026,6 +2547,8 @@ pl.col("category").arg_unique()
 ---
 
 # 19. Joins
+
+Relational joins match **rows from two DataFrames** using keys or predicates. A key's cardinality determines whether the join preserves, duplicates, or discards rows.
 
 ## `join()`
 
@@ -2059,6 +2582,19 @@ df.join(
 ```
 
 ## Join types
+
+Let the left table be `(id, color) = [(1, "red"), (2, "blue")]` and the right table be `(id, density) = [(2, 5.0), (3, 7.0)]`.
+
+| Join type | Output IDs | Interpretation |
+|---|---|---|
+| `inner` | `[2]` | Keys present in both |
+| `left` | `[1, 2]` | All left rows; missing right fields become null |
+| `full` | `[1, 2, 3]` | All keys from either side (possibly separate coalesced key handling) |
+| `semi` | `[2]` | Left records with a matching right key, no right columns |
+| `anti` | `[1]` | Left records with no matching right key |
+| `cross` | four pairs | Every left row paired with every right row |
+
+These ID sequences illustrate membership; join result **order is not guaranteed** unless the API's order controls are specified.
 
 ### Inner
 
@@ -2146,16 +2682,20 @@ df.join(
 
 Where supported, validate expected join cardinality to catch accidental many-to-many relationships.
 
-Conceptually useful cases:
+Relationship cases:
 
-```text
-1:1
-1:m
-m:1
-m:m
+```python
+measurements.join(
+    sensors,
+    on="sensor_id",
+    how="left",
+    validate="m:1",
+)
 ```
 
-Use validation when join-key uniqueness is an invariant.
+`m:1` means each measurement may match at most one sensor metadata record; the left table may repeat its key, but the right key must be unique. `1:1` requires both keys unique, `1:m` requires unique left keys, and `m:m` imposes no uniqueness restriction.
+
+If the right table accidentally has two rows for one sensor, a left join can **duplicate** measurement rows. Validation exposes that violation instead of silently changing the row count. Some validation options are unavailable with streaming execution.
 
 ## `join_asof()`
 
@@ -2168,6 +2708,16 @@ trades.join_asof(
     strategy="backward",
 )
 ```
+
+Consider a weather station reporting at `09:00`, `09:10`, and `09:20`. An event occurring at `09:12` can match:
+
+| Strategy | Selected observation |
+|---|---|
+| `"backward"` | `09:10` (latest observation at/before event) |
+| `"forward"` | `09:20` (first observation at/after event) |
+| `"nearest"` | `09:10` (closest timestamp) |
+
+Both inputs must be **sorted by their as-of join key**. A `tolerance` limits the permissible time/distance gap; if no candidate qualifies, the right-side fields are null.
 
 Strategies:
 
@@ -2226,11 +2776,15 @@ Useful for:
 - threshold relationships;
 - non-equi joins.
 
+Unlike a standard equality join, an event can match **several intervals**, and every matching combination can appear in the output. Use it when the condition is a relationship between rows (`x ≥ start` and `x ≤ end`), not merely equal identifiers.
+
 ## `merge_sorted()`
 
 Merge two already-sorted DataFrames using a sorted key.
 
 Useful when data is known to be sorted and you want to preserve/merge sorted structure.
+
+For example, two independently recorded sorted timestamp streams `[1, 4, 9]` and `[2, 6]` can be merged into a sorted stream `[1, 2, 4, 6, 9]`. Both input frames must already be sorted on the key and have compatible schemas; `merge_sorted()` does not sort arbitrary unsorted inputs.
 
 ---
 
@@ -2265,6 +2819,24 @@ pl.concat(
 )
 ```
 
+The modes answer different schema questions:
+
+| Mode | Effect | Example |
+|---|---|---|
+| `vertical` | Append rows with the same schema | Two batches with `(id, reading)` |
+| `vertical_relaxed` | Append rows while finding compatible common dtypes | `Int32` + `Int64` readings |
+| `diagonal` | Union column names; absent values become null | `(id, x)` + `(id, y)` |
+| `horizontal` | Place columns side by side, aligned by row position | Separate feature matrices with matching row order |
+
+For example, diagonal concatenation of `{"id":[1],"x":[10]}` with `{"id":[2],"y":[20]}` produces:
+
+| id | x | y |
+|---:|---:|---:|
+| 1 | 10 | null |
+| 2 | null | 20 |
+
+Horizontal concatenation does **not** match rows by key; use `join()` for key-based alignment.
+
 Horizontal concatenation:
 
 ```python
@@ -2280,6 +2852,8 @@ pl.concat(
 df1.vstack(df2)
 ```
 
+Stacks **rows** (same column schema), producing more records. Compare `pl.concat([df1, df2], how="vertical")` when combining multiple frames.
+
 ## `hstack()`
 
 ```python
@@ -2291,11 +2865,15 @@ df.hstack(
 )
 ```
 
+Stacks **columns** by position (compatible heights), producing more variables per record. It does not perform key matching or value alignment; use `join()` if rows must be paired by an identifier.
+
 ## `extend()`
 
 Append rows from another DataFrame in-place-like fashion where the API allows.
 
 This can be useful for repeated extension scenarios but should be used intentionally; for many frames, a single `pl.concat(...)` is often clearer.
+
+`extend()` mutates the receiver, unlike ordinary expression-style transformations that return a new frame. For a collection of observational batches, one `pl.concat(batches)` is usually easier to reason about; `extend()` is useful for appending to an existing owned DataFrame.
 
 ---
 
@@ -2322,6 +2900,8 @@ df.pivot(
     values="value",
 )
 ```
+
+`pivot()` is an **eager** operation because output column names arise from observed values. For a lazy pipeline, collect before pivoting or construct an equivalent aggregation when the possible columns are known in advance.
 
 Output conceptually:
 
@@ -2356,6 +2936,8 @@ df.unpivot(
 ```
 
 Conceptually replaces pandas `melt()`.
+
+For scientific measurements, a wide table with `sample_id`, `temperature`, and `pressure` can become three columns: `sample_id`, `variable` (`"temperature"` or `"pressure"`), and `value`. This changes **column layout**, not the meaning of measurements.
 
 ## `explode()`
 
@@ -2399,6 +2981,8 @@ df.transpose()
 ```
 
 Use sparingly for large analytical data because transposition works against the usual columnar orientation.
+
+Transposition swaps the row and column axes; it is **not** the same as pivot/unpivot, which transform data between long and wide record layouts using identifier and variable columns. A `3×2` DataFrame becomes `2×3` (subject to naming/schema details). Transposing mixed-dtype columns may require coercion to a common dtype.
 
 ## `partition_by()`
 
@@ -2479,7 +3063,23 @@ Regex-aware:
 pl.col("text").str.contains(r"\d+")
 ```
 
-Literal behavior can be requested where appropriate.
+Regular expressions are patterns, not ordinary substrings. For example:
+
+```python
+df = pl.DataFrame({"sample": ["A-42", "B-test", "C-7"]})
+df.select(
+    has_digits=pl.col("sample").str.contains(r"\d+"),
+    has_dash=pl.col("sample").str.contains("-", literal=True),
+)
+```
+
+| sample | has_digits | has_dash |
+|---|---|---|
+| A-42 | true | true |
+| B-test | false | true |
+| C-7 | true | true |
+
+`literal=True` treats regex characters as ordinary text. `str.contains(".")` matches any character, but `str.contains(".", literal=True)` specifically searches for a period.
 
 ## Replace
 
@@ -2508,6 +3108,12 @@ pl.col("text").str.extract(
     r"ID=(\d+)",
     group_index=1,
 )
+```
+
+For `text=["ID=42", "ID=7", "missing"]`, the results are `["42", "7", null]`. Parentheses create a **capture group**; `group_index=1` retrieves the first captured group, not the entire matched substring. The digits are returned as strings until explicitly cast:
+
+```python
+pl.col("text").str.extract(r"ID=(\d+)", 1).cast(pl.Int64)
 ```
 
 ## Extract all matches
@@ -2542,7 +3148,7 @@ When a known number of fields is expected:
 pl.col("code").str.split_exact("-", 2)
 ```
 
-This can produce a struct that can then be unnested.
+The `2` means **two splits**, yielding **three fields**. For `"X-07-A"`, the resulting struct contains `"X"`, `"07"`, and `"A"`. Unlike `str.split()` (a variable-length `List`), `str.split_exact()` produces a fixed-field `Struct` that can be unnested.
 
 ## String length
 
@@ -2559,6 +3165,8 @@ pl.col("name").str.len_bytes()
 ```
 
 Character count and byte count differ for Unicode text.
+
+For example, `"é"` has **one Unicode character** but **two UTF-8 bytes**: `len_chars() = 1` and `len_bytes() = 2`.
 
 ## Slice
 
@@ -2605,6 +3213,18 @@ The string namespace includes encoding and decoding operations for supported for
 Polars provides methods for extracting/decoding JSON string content where applicable.
 
 For nested structured data, consider parsing into `Struct`/`List` instead of repeatedly manipulating raw JSON strings.
+
+```python
+df = pl.DataFrame({"payload": ['{"pH": 7.2}', '{"pH": 6.8}']})
+
+df.with_columns(
+    parsed=pl.col("payload").str.json_decode(
+        pl.Struct({"pH": pl.Float64})
+    )
+).unnest("parsed")
+```
+
+The resulting `pH` field is numeric, while `payload` remains the original string. Specifying the nested dtype gives a predictable schema.
 
 ## String parsing to date/datetime
 
@@ -2679,6 +3299,8 @@ pl.col("timestamp").dt.truncate("1d")
 pl.col("timestamp").dt.truncate("1mo")
 ```
 
+Truncation **floors** timestamps to a bucket boundary. `2026-11-18 14:37` truncated to `"1h"` becomes `14:00`; truncated to `"1mo"` it becomes `2026-11-01 00:00`.
+
 ## `round()`
 
 Round to nearest temporal interval:
@@ -2686,6 +3308,8 @@ Round to nearest temporal interval:
 ```python
 pl.col("timestamp").dt.round("15m")
 ```
+
+Rounding selects the nearest time boundary. `14:08` rounded to `"15m"` becomes `14:15`, whereas truncation becomes `14:00`.
 
 ## `offset_by()`
 
@@ -2697,9 +3321,18 @@ pl.col("date").dt.offset_by("-3mo")
 pl.col("date").dt.offset_by("1y")
 ```
 
+Calendar-aware offsets matter because months differ in length. Adding `"1mo"` advances by a calendar month with month-end handling; it does **not** mean adding 30 days. Fixed elapsed durations and calendar periods have different semantics.
+
 ## Month boundaries
 
-Methods such as month start/end helpers may be useful for period normalization where supported.
+Normalize a date to the first or last date of its calendar month:
+
+```python
+pl.col("date").dt.month_start()
+pl.col("date").dt.month_end()
+```
+
+For `2024-02-12`, these produce `2024-02-01` and `2024-02-29`. The end-of-month result accounts for leap years; it is not equivalent to always adding 30 days.
 
 ## Time zone conversion
 
@@ -2720,6 +3353,11 @@ pl.col("timestamp").dt.replace_time_zone(
 ```
 
 These operations are semantically different.
+
+- `convert_time_zone("America/Toronto")`: preserve the **same instant**, changing the displayed clock time.
+- `replace_time_zone("America/Toronto")`: reinterpret a **clock reading** as belonging to another time zone, potentially changing the represented instant.
+
+For example, UTC `2026-01-01 12:00` converted to Toronto displays `07:00` on the same date while representing the same instant. Replacing the timezone instead interprets `12:00` as Toronto local time. Daylight-saving transitions can introduce ambiguous or nonexistent local times.
 
 ## Duration arithmetic
 
@@ -2800,6 +3438,8 @@ id   scores
 2    [40, 50]
 ```
 
+Unlike scalar arithmetic on ordinary columns, `.list` operations work **within each row's sequence**. Each row can contain a different number of elements.
+
 List operations use `.list`.
 
 ## Length
@@ -2847,6 +3487,15 @@ pl.col("scores").list.min()
 pl.col("scores").list.max()
 ```
 
+For `scores=[[10, 20, 30], [40, 50]]`:
+
+| scores | `list.len()` | `list.sum()` | `list.mean()` |
+|---|---:|---:|---:|
+| [10, 20, 30] | 3 | 60 | 20.0 |
+| [40, 50] | 2 | 90 | 45.0 |
+
+Compare `pl.col("scores").list.sum()` (one result **per row**) with `pl.col("measurement").sum()` (one aggregation **across rows**).
+
 ## Contains
 
 ```python
@@ -2885,14 +3534,26 @@ pl.col("tags").list.join(",")
 
 List namespace supports set-style operations for list columns where applicable.
 
-Useful concepts:
+For sets `A={1, 2, 3}` and `B={3, 4}`:
 
-```text
-difference
-intersection
-union
-symmetric difference
+```python
+a = pl.col("observed_species")
+b = pl.col("reference_species")
+
+a.list.set_difference(b)
+a.list.set_intersection(b)
+a.list.set_union(b)
+a.list.set_symmetric_difference(b)
 ```
+
+| Operation | Mathematical result for A, B |
+|---|---|
+| Difference `A \\ B` | `{1, 2}` |
+| Intersection `A ∩ B` | `{3}` |
+| Union `A ∪ B` | `{1, 2, 3, 4}` |
+| Symmetric difference `A △ B` | `{1, 2, 4}` |
+
+Set operations use membership semantics rather than preserving duplicate occurrences; output order is not necessarily the input order.
 
 ## `list.eval()`
 
@@ -2903,6 +3564,8 @@ pl.col("values").list.eval(
     pl.element() * 2
 )
 ```
+
+For `values=[[1, 2], [3, 5, 8]]`, the result is `[[2, 4], [6, 10, 16]]`. `pl.element()` represents each **element of the current list**, not the DataFrame row.
 
 Filter elements:
 
@@ -2947,6 +3610,26 @@ df.explode("tags")
 - `List`: variable length.
 - `Array`: fixed shape/width.
 
+For example, each 3D position has exactly three coordinates. A fixed-size `Array` can encode this invariant:
+
+```python
+df = pl.DataFrame({
+    "position": [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]
+}, schema={"position": pl.Array(pl.Float64, 3)})
+
+df.select(
+    total=pl.col("position").arr.sum(),
+    x=pl.col("position").arr.get(0),
+)
+```
+
+| total | x |
+|---:|---:|
+| 6.0 | 1.0 |
+| 15.0 | 4.0 |
+
+The equivalent `List` type would allow 3 elements in one row and 5 in another.
+
 Array namespace:
 
 ```python
@@ -2968,6 +3651,16 @@ Common operations parallel many list operations:
 .arr.unique()
 ```
 
+## `arr.dot()` versus `Expr.dot()`
+
+```python
+df.with_columns(
+    projected=pl.col("position").arr.dot([0.0, 1.0, 0.0])
+)
+```
+
+Result: `projected=[2.0, 5.0]`—a dot product **within each row's 3-element array**. In contrast, `pl.col("a").dot(pl.col("b"))` computes one dot product **down two scalar columns**.
+
 Use `Array` for fixed-size vector-like data where the fixed width is part of the schema.
 
 Use `List` for variable-length sequences.
@@ -2977,6 +3670,8 @@ Use `List` for variable-length sequences.
 # 26. Struct expressions
 
 A `Struct` is a nested record with named fields.
+
+Unlike a `List` or `Array` whose elements are accessed primarily by position, a struct's fields are accessed by **names**, and its fields can have different dtypes.
 
 ## Create a struct
 
@@ -2995,9 +3690,17 @@ df.with_columns(
 pl.col("location").struct.field("latitude")
 ```
 
+With `latitude=[43.7, 45.5]` and `longitude=[-79.4, -73.6]`, `pl.struct("latitude", "longitude")` creates one record per row. `struct.field("latitude")` retrieves `[43.7, 45.5]` without flattening the entire record.
+
 ## Rename fields
 
-Struct namespace provides field-renaming capabilities where appropriate.
+```python
+pl.col("location").struct.rename_fields(
+    ["lat", "lon"]
+)
+```
+
+This changes field **names inside the struct**; it does not by itself turn those fields into DataFrame columns. Use `unnest("location")` if actual top-level `lat` and `lon` columns are required. Names are positional in the declared struct field order.
 
 ## Unnest
 
@@ -3031,6 +3734,8 @@ pl.struct(
 
 # 27. Categorical and Enum data
 
+Both store repeated string-like categories with compact encodings. The important difference is **who defines the allowed values** and whether categories have a defined order.
+
 ## `pl.Categorical`
 
 Useful for repeated string-like category values.
@@ -3040,6 +3745,15 @@ df.with_columns(
     pl.col("category").cast(pl.Categorical)
 )
 ```
+
+Useful when labels are discovered from the data or can expand:
+
+```python
+df = pl.DataFrame({"species": ["oak", "pine", "oak", "birch"]})
+df.with_columns(pl.col("species").cast(pl.Categorical))
+```
+
+The category set is inferred (`oak`, `pine`, `birch`). More species labels can appear later. Current categorical sorting is lexical, not an explicitly declared biological or ordinal progression.
 
 ## `pl.Enum`
 
@@ -3061,6 +3775,22 @@ df.with_columns(
 )
 ```
 
+An Enum is both a **restricted category domain** and an **explicit ordering**. For example, biological stages have a predefined progression:
+
+```python
+stage = pl.Enum(["seed", "sprout", "mature"])
+
+df = pl.DataFrame({
+    "plant": ["A", "B", "C"],
+    "stage": ["mature", "seed", "sprout"],
+}).with_columns(
+    pl.col("stage").cast(stage)
+)
+
+df.sort("stage")
+```
+
+Plants sort in the order `B` (seed), `C` (sprout), `A` (mature)—the **declared Enum order**, not alphabetical order. Strictly casting the new label `"flowering"` to this Enum raises because it is not an allowed category.
 ## Categorical vs Enum
 
 `Categorical`:
@@ -3072,13 +3802,37 @@ df.with_columns(
 
 - allowed values are explicitly defined;
 - useful when category domain is known;
-- invalid values can be treated as schema/data errors depending on conversion settings.
+- sorting follows the declared category order;
+- invalid values normally raise on strict casting; with `strict=False` they can become null.
+
+**Rule of thumb:** `Categorical` for open-ended labels such as species or equipment identifiers; `Enum` for intentional fixed domains like `["queued", "running", "complete"]` or `["seed", "sprout", "mature"]`.
 
 ---
 
 # 28. Horizontal operations
 
 Horizontal functions operate across columns for each row.
+
+“Horizontal” and “vertical” refer to the axis of calculation:
+
+```python
+df = pl.DataFrame({
+    "trial_1": [2.0, 4.0],
+    "trial_2": [3.0, 8.0],
+    "trial_3": [5.0, 12.0],
+})
+
+df.with_columns(
+    trial_mean=pl.mean_horizontal("trial_1", "trial_2", "trial_3")
+)
+```
+
+| trial_1 | trial_2 | trial_3 | trial_mean |
+|---:|---:|---:|---:|
+| 2.0 | 3.0 | 5.0 | 3.333... |
+| 4.0 | 8.0 | 12.0 | 8.0 |
+
+By contrast, `pl.col("trial_1").mean()` returns a **single scalar** `3.0` computed down the first column. Horizontal aggregates generally treat nulls differently from ordinary boolean unknowns; check the function's null semantics when missing data matters.
 
 ## `pl.sum_horizontal()`
 
@@ -3126,6 +3880,8 @@ pl.any_horizontal(
 )
 ```
 
+This is an OR across expressions **within each row**: at least one test must be true. `pl.all_horizontal(...)` is an AND across expressions: every test must be true. These are especially useful for validating several measurement channels at once.
+
 ## `pl.all_horizontal()`
 
 ```python
@@ -3166,9 +3922,32 @@ pl.fold(
 )
 ```
 
+Analogous to functional programming's left fold: apply the binary function successively, **starting from an explicit initial accumulator**. For one row with `a=2`, `b=3`, and `c=4`:
+
+```python
+pl.fold(
+    acc=pl.lit(100),
+    function=lambda acc, x: acc - x,
+    exprs=["a", "b", "c"],
+)
+```
+
+Result: `((100 - 2) - 3) - 4 = 91`.
+
 ## `pl.reduce()`
 
 Reduce expressions without manually supplying an initial accumulator.
+
+```python
+pl.reduce(
+    function=lambda acc, x: acc - x,
+    exprs=["a", "b", "c"],
+)
+```
+
+For the same row, this starts with the **first selected expression**, giving `(2 - 3) - 4 = -5`.
+
+Both functions operate **horizontally on Polars expressions**, rather than iterating over Python row objects. They are analogous in spirit to `functools.reduce`, but build native expression computations. Use `sum_horizontal` / `min_horizontal` / `max_horizontal` where those named operations already express the intent.
 
 Use specialized horizontal functions when one exists; use fold/reduce for custom expression-level reduction.
 
@@ -3187,21 +3966,25 @@ Time-series work usually combines:
 - `rolling`;
 - `join_asof`.
 
+An essential invariant is that time-series calculations follow a **meaningful chronological order**. Neither `shift(1)` nor `rolling_mean(3)` knows what “previous” means unless the input is already sorted appropriately.
+
 ## Lag within entity
 
 ```python
 df = (
     df
-    .sort(["customer_id", "date"])
+    .sort(["sensor_id", "date"])
     .with_columns(
-        previous_amount=(
-            pl.col("amount")
+        previous_reading=(
+            pl.col("reading")
             .shift(1)
-            .over("customer_id")
+            .over("sensor_id")
         )
     )
 )
 ```
+
+This produces a previous reading for each sensor **without borrowing the previous row of another sensor**. The first observation within each sensor receives null.
 
 ## Month-over-month difference
 
@@ -3241,6 +4024,14 @@ Use `join_asof()` when one time series should be matched to the latest/nearest t
 
 # 30. Rolling and dynamic grouping
 
+There are three related but distinct ideas:
+
+| Operation | Window is based on | Output |
+|---|---|---|
+| `Expr.rolling_mean(window_size=3)` | The previous 3 row positions | One value per input row |
+| `df.rolling(index_column="time", period="7d")` | A trailing interval relative to each observation | Aggregations for observation-based windows |
+| `df.group_by_dynamic("time", every="1d")` | Regular calendar/time buckets | One aggregated row per populated bucket |
+
 ## Rolling expression methods
 
 Common methods include:
@@ -3267,6 +4058,17 @@ df.with_columns(
 )
 ```
 
+For `reading=[2.0, 4.0, 8.0, 16.0]` and a 3-row rolling mean:
+
+| reading | 3-row rolling mean |
+|---:|---:|
+| 2.0 | null |
+| 4.0 | null |
+| 8.0 | 4.6667 |
+| 16.0 | 9.3333 |
+
+The default minimum observations generally equals the window size for these fixed-size rolling aggregations, hence the first two nulls. Use `min_samples=1` if a partial window should produce a value; this changes the meaning of the early estimates.
+
 ## DataFrame/LazyFrame `rolling()`
 
 Create rolling groups based on a temporal or integer index.
@@ -3282,6 +4084,8 @@ df.rolling(
 
 Useful for trailing windows tied to actual timestamps.
 
+Unlike a fixed 7-**row** rolling expression, a `"7d"` interval uses the **time distance**. A 7-day window may contain two observations or thousands, depending on sampling density. The index must be sorted (within each partition if grouping by another key). Window boundary inclusion is controlled by parameters such as `closed`.
+
 ## `group_by_dynamic()`
 
 Create regular time buckets.
@@ -3296,6 +4100,10 @@ df.group_by_dynamic(
     total_sales=pl.col("sales").sum()
 )
 ```
+
+With readings at `09:03`, `09:25`, and `10:08`, hourly buckets can aggregate the first two readings into the `09:00` interval and the third into the `10:00` interval. Unlike pandas' `resample`, Polars does **not** automatically create empty time buckets for intervals with no observations.
+
+Input must be sorted by the time index. When `period` is omitted, each bucket normally has the width specified by `every`. Using `every="1d", period="7d"` produces **overlapping 7-day windows that begin one day apart**, so a single reading can contribute to several outputs.
 
 Hourly:
 
@@ -3336,17 +4144,19 @@ start_by
 
 `group_by_dynamic`:
 
-- creates regular time windows/buckets.
+- creates regular time windows/buckets at chosen boundaries, including overlapping windows when configured.
 
 `rolling`:
 
-- creates windows relative to observations/index positions.
+- creates windows relative to **each observation's index value**.
 
 Use the one matching the temporal semantics of the problem.
 
 ---
 
 # 31. LazyFrame
+
+A `LazyFrame` describes a **query plan**. Most operations construct a new plan without executing it; `collect()` executes it and returns a materialized `DataFrame`.
 
 ## Create from a DataFrame
 
@@ -3385,6 +4195,8 @@ lf = (
 
 At this point the result is still a `LazyFrame`.
 
+An analogy is constructing an expression tree: `filter`, `with_columns`, and `group_by` become nodes that Polars can inspect and optimize before any data must be loaded.
+
 ## `collect()`
 
 Materialize:
@@ -3393,6 +4205,8 @@ Materialize:
 result = lf.collect()
 ```
 
+`type(lf)` is `pl.LazyFrame`; `type(result)` is `pl.DataFrame`. Collect at the boundary where results are actually needed, rather than after each transformation.
+
 ## `collect_schema()`
 
 Resolve output schema:
@@ -3400,6 +4214,8 @@ Resolve output schema:
 ```python
 schema = lf.collect_schema()
 ```
+
+This returns the query's output schema (column names and dtypes) **without collecting all result rows**. Schema resolution can still require metadata access or other work; it is not equivalent to evaluating every row.
 
 ## `fetch` / small-query development
 
@@ -3464,6 +4280,8 @@ For formats such as Parquet, this can substantially reduce I/O.
 
 Repeated equivalent expressions may be optimized so redundant computation is reduced.
 
+For example, when both `zscore` and `threshold_flag` use the same costly normalized signal expression, Polars may calculate shared components once as part of its optimized execution plan. Writing a reusable Python `Expr` object makes definitions consistent; it does not require intermediate materialization.
+
 ## Join optimization
 
 The optimizer can reason about join ordering/strategies under supported scenarios.
@@ -3475,6 +4293,8 @@ Inspect query plan:
 ```python
 print(lf.explain())
 ```
+
+`explain()` returns a **string representation of a query plan**, not query results. An optimized plan may show filters placed close to a `SCAN` (predicate pushdown) and unnecessary columns omitted (projection pushdown). Inspect the plan when performance is surprising.
 
 Useful for verifying:
 
@@ -3499,6 +4319,7 @@ Execute and collect profiling information:
 result, profile = lf.profile()
 ```
 
+This **executes** the query and returns both the result DataFrame and timing/profiling information as a second DataFrame. Unlike `explain()`, it measures runtime stages; small timings may be noisy, so compare repeated runs for meaningful benchmarks.
 Useful for locating expensive query stages.
 
 ## `serialize()`
@@ -3519,6 +4340,8 @@ Reconstruct a lazy plan from serialized form where supported.
 
 Streaming execution can process data in batches rather than requiring the entire result to be held in memory at once.
 
+Streaming is an **execution strategy**, not a separate DataFrame type. It is especially useful for large scans, filters, and aggregations whose computation can be processed in batches. Some operations still require global state, ordering, or materialization.
+
 ## Collect using streaming engine
 
 ```python
@@ -3535,6 +4358,14 @@ Evaluate a lazy query and consume ready batches.
 
 Useful for integrating with batch-oriented downstream systems.
 
+Compared with `collect()` (one complete `DataFrame`), `collect_batches()` yields DataFrame batches that a consumer can process incrementally. Example pattern:
+
+```python
+for batch in lf.collect_batches():
+    process_batch(batch)
+```
+
+The downstream function can write, aggregate, or otherwise consume each batch without building a Python list of all rows. Check engine support and batch lifetimes for the Polars version in use.
 ## `sink_parquet()`
 
 Write a lazy query directly to Parquet:
@@ -3752,6 +4583,8 @@ df = pl.read_database(
 )
 ```
 
+This accepts a query and an existing supported connection/engine (for example a SQLAlchemy connection). It is useful when connection lifecycle or transactions are managed elsewhere in the application.
+
 ## `pl.read_database_uri()`
 
 Read through a connection URI where supported:
@@ -3762,6 +4595,10 @@ df = pl.read_database_uri(
     uri=uri,
 )
 ```
+
+This accepts a connection **URI** rather than an already-open connection and uses supported URI-based backends (for example ConnectorX or ADBC). The best choice depends on the backend, dependencies, and connection-management needs.
+
+In both cases, `read_database*` materializes a **Polars DataFrame**. It is not a lazy SQL scan: include filters/projections in the SQL query when the database should execute them before transfer.
 
 ## `write_database()`
 
@@ -3927,6 +4764,19 @@ df.with_columns(
 )
 ```
 
+This is a **fallback**, not the Polars equivalent of writing arbitrary vectorized expressions. The function receives individual Python values; it typically prevents native engine optimization of the function's internals. When using it, specify `return_dtype=...` when possible so the output schema is predictable.
+
+```python
+df.with_columns(
+    label=pl.col("sample_code").map_elements(
+        decode_custom_code,
+        return_dtype=pl.String,
+    )
+)
+```
+
+Null values are skipped by default for this method; account for that if the Python function must see them.
+
 This executes Python code per element and is usually much slower than a native expression.
 
 Instead of:
@@ -3979,11 +4829,15 @@ df.map_rows(function)
 
 Use only when a computation genuinely cannot be expressed through native column expressions.
 
+Unlike `map_elements()` (one selected column's values), `map_rows()` passes a **tuple of values from a row**. It is especially expensive because it converts row data into Python objects and may lose column-name information. A native expression such as `(pl.col("x") ** 2 + pl.col("y") ** 2).sqrt()` is normally preferable for a vector magnitude.
+
 ## `map_batches()`
 
 Apply a custom function to batches rather than individual elements.
 
 This can be useful for integrating vectorized external libraries, but it introduces an optimization boundary. Use native expressions first when possible.
+
+It differs from per-element mapping by passing a **batch/Series** to the function, which can apply a vectorized routine (for example, a specialized scientific NumPy function). The routine still needs to return the correct shape and dtype for its context. Batch size and number of calls can vary, particularly in lazy execution; do not rely on receiving the entire dataset in one call.
 
 ## NumPy ufuncs
 
@@ -4009,6 +4863,8 @@ def clean_names(df: pl.DataFrame) -> pl.DataFrame:
 
 result = df.pipe(clean_names)
 ```
+
+The call above is conceptually `clean_names(df)`; `pipe()` simply places a Python function into a fluent transformation chain. The function can accept extra arguments via `df.pipe(func, arg1, option=...)`. A `pipe` is not itself a special optimizer operation—whether it remains lazy depends on what the function does with its `LazyFrame` argument.
 
 Chain functions:
 
@@ -4142,6 +4998,20 @@ Test:
 - null behavior;
 - duplicates;
 - sorting invariants.
+
+For floating-point scientific calculations, consider numerical tolerance rather than exact equality of every bit. For example:
+
+```python
+assert_frame_equal(
+    actual,
+    expected,
+    check_exact=False,
+    rel_tol=1e-6,
+    abs_tol=1e-9,
+)
+```
+
+This still checks the structure and values, but allows small numeric rounding differences. For discrete IDs, category codes, or financial reconciliation invariants, exact checks may be more appropriate.
 
 Example:
 
@@ -4561,6 +5431,7 @@ drop_nans()
 fill_null()
 fill_nan()
 interpolate()
+interpolate_by()
 with_row_index()
 ```
 
@@ -4745,6 +5616,7 @@ log()
 pow()
 clip()
 sign()
+dot()
 ```
 
 ## String namespace
@@ -4770,6 +5642,7 @@ str.tail()
 str.len_chars()
 str.len_bytes()
 str.strptime()
+str.json_decode()
 ```
 
 ## Datetime namespace
@@ -4785,12 +5658,17 @@ dt.quarter()
 dt.hour()
 dt.minute()
 dt.second()
+dt.millisecond()
+dt.microsecond()
+dt.nanosecond()
 dt.date()
 dt.time()
 dt.strftime()
 dt.truncate()
 dt.round()
 dt.offset_by()
+dt.month_start()
+dt.month_end()
 dt.convert_time_zone()
 dt.replace_time_zone()
 dt.total_days()
@@ -4819,6 +5697,10 @@ list.sort()
 list.reverse()
 list.join()
 list.eval()
+list.set_difference()
+list.set_intersection()
+list.set_union()
+list.set_symmetric_difference()
 ```
 
 ## Array namespace
@@ -4834,12 +5716,14 @@ arr.max()
 arr.unique()
 arr.sort()
 arr.reverse()
+arr.dot()
 ```
 
 ## Struct namespace
 
 ```text
 struct.field()
+struct.rename_fields()
 df.unnest()
 pl.struct()
 ```
@@ -5207,6 +6091,80 @@ rejected = validated.filter(
     pl.col("rejection_reason").is_not_null()
 )
 ```
+
+## Example: environmental sensor observations
+
+Imagine irregularly spaced temperature readings from several stations. The goal is to remove non-finite values, interpolate short gaps **within each station**, and compute a trailing mean of each station's readings.
+
+```python
+observations = pl.DataFrame({
+    "station": ["A", "A", "A", "B", "B", "B"],
+    "hour": [0, 1, 4, 0, 2, 3],
+    "temperature": [10.0, None, 22.0, 5.0, 9.0, None],
+})
+
+result = (
+    observations
+    .sort(["station", "hour"])
+    .with_columns(
+        clean_temperature=(
+            pl.when(pl.col("temperature").is_finite())
+            .then(pl.col("temperature"))
+            .otherwise(None)
+        )
+    )
+    .with_columns(
+        estimated_temperature=(
+            pl.col("clean_temperature")
+            .interpolate_by("hour")
+            .over("station")
+        )
+    )
+    .with_columns(
+        recent_mean=(
+            pl.col("estimated_temperature")
+            .rolling_mean(window_size=2, min_samples=1)
+            .over("station")
+        )
+    )
+)
+```
+
+| station | hour | temperature | estimated_temperature | recent_mean |
+|---|---:|---:|---:|---:|
+| A | 0 | 10.0 | 10.0 | 10.0 |
+| A | 1 | null | 13.0 | 11.5 |
+| A | 4 | 22.0 | 22.0 | 17.5 |
+| B | 0 | 5.0 | 5.0 | 5.0 |
+| B | 2 | 9.0 | 9.0 | 7.0 |
+| B | 3 | null | null | 9.0 |
+
+The missing reading at station A's hour 1 is one quarter of the way between hours 0 and 4, so it is estimated as `13.0`. The last station B reading remains null because there is no later observation to interpolate toward. The trailing mean then uses the previous two observations where available, ignoring null readings.
+
+## Example: experimental results by condition
+
+```python
+trials = pl.DataFrame({
+    "condition": ["control", "treated", "control", "treated"],
+    "response": [2.0, 4.0, 6.0, 8.0],
+})
+
+summary = trials.group_by("condition").agg(
+    sample_size=pl.len(),
+    mean_response=pl.col("response").mean(),
+    sample_variance=pl.col("response").var(),
+)
+
+annotated = trials.with_columns(
+    condition_mean=pl.col("response").mean().over("condition"),
+    deviation=(
+        pl.col("response")
+        - pl.col("response").mean().over("condition")
+    ),
+)
+```
+
+`summary` has **two rows**—one per experimental condition—while `annotated` retains **all four observations**. This is a practical difference between aggregation and a window transform in experimental analysis.
 
 ---
 
