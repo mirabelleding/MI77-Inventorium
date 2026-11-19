@@ -2123,11 +2123,11 @@ df.select(
 
 Covariance measures how two variables vary **together**, retaining the product of their units. Positive covariance indicates they generally move in the same direction; negative covariance indicates opposite movement. Correlation normalizes covariance by both standard deviations:
 
-\[
+$$
 \operatorname{corr}(X,Y)=
 \frac{\operatorname{cov}(X,Y)}
 {\sigma_X\sigma_Y}.
-\]
+$$
 
 Covariance is **not** a “difference of variances” or a “variance of differences.” It is a separate measure of joint variation.
 
